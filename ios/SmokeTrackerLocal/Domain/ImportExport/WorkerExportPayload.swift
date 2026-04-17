@@ -16,6 +16,13 @@ struct WorkerExportPayload: Decodable {
         self.timezone = timezone
         self.logs = logs
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        exportedAt = container.decodeLossyDateIfPresent(forKey: .exportedAt)
+        timezone = try container.decodeIfPresent(String.self, forKey: .timezone)
+        logs = try container.decode([WorkerExportLog].self, forKey: .logs)
+    }
 }
 
 struct WorkerExportLog: Decodable {
@@ -42,7 +49,7 @@ struct WorkerExportLog: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
-        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        createdAt = try container.decodeLossyDate(forKey: .createdAt)
         triggerPrimary = try container.decode(String.self, forKey: .triggerPrimary)
         triggerSecondary = container.decodeLossyStringIfPresent(forKey: .triggerSecondary)
         delayed10min = container.decodeLossyIntIfPresent(forKey: .delayed10min)
@@ -52,7 +59,93 @@ struct WorkerExportLog: Decodable {
     }
 }
 
+private enum DateParsers {
+    static let iso8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    static let iso8601Fractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    static let fallbackFormatters: [DateFormatter] = {
+        let formats = [
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+        ]
+        return formats.map { format in
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.timeZone = TimeZone(secondsFromGMT: 0)
+            df.dateFormat = format
+            return df
+        }
+    }()
+
+    static func parseDateString(_ raw: String) -> Date? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+
+        if let d = iso8601Fractional.date(from: value) { return d }
+        if let d = iso8601.date(from: value) { return d }
+        for formatter in fallbackFormatters {
+            if let d = formatter.date(from: value) { return d }
+        }
+
+        if let timestamp = Double(value) {
+            return parseUnixTimestamp(timestamp)
+        }
+
+        return nil
+    }
+
+    static func parseUnixTimestamp(_ raw: Double) -> Date {
+        // Heuristic: millisecond timestamps are usually > 1e12
+        if raw > 1_000_000_000_000 {
+            return Date(timeIntervalSince1970: raw / 1000)
+        }
+        return Date(timeIntervalSince1970: raw)
+    }
+}
+
 private extension KeyedDecodingContainer {
+    func decodeLossyDate(forKey key: Key) throws -> Date {
+        if let dateValue = try? decode(Date.self, forKey: key) {
+            return dateValue
+        }
+
+        if let stringValue = try? decode(String.self, forKey: key),
+           let parsed = DateParsers.parseDateString(stringValue) {
+            return parsed
+        }
+
+        if let intValue = try? decode(Int.self, forKey: key) {
+            return DateParsers.parseUnixTimestamp(Double(intValue))
+        }
+
+        if let doubleValue = try? decode(Double.self, forKey: key) {
+            return DateParsers.parseUnixTimestamp(doubleValue)
+        }
+
+        throw DecodingError.dataCorruptedError(
+            forKey: key,
+            in: self,
+            debugDescription: "Expected date in ISO8601 / yyyy-MM-dd HH:mm:ss / unix timestamp"
+        )
+    }
+
+    func decodeLossyDateIfPresent(forKey key: Key) -> Date? {
+        guard contains(key) else { return nil }
+        return try? decodeLossyDate(forKey: key)
+    }
+
     func decodeLossyIntIfPresent(forKey key: Key) -> Int? {
         guard contains(key) else { return nil }
 
