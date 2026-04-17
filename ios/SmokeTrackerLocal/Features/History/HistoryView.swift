@@ -18,6 +18,7 @@ struct HistoryView: View {
                     .pickerStyle(.segmented)
                     .onChange(of: viewModel.selectedRange) { _, _ in
                         viewModel.reload()
+                        syncSelectionToLatest()
                     }
 
                     summaryCard
@@ -30,7 +31,10 @@ struct HistoryView: View {
                 .padding()
             }
             .navigationTitle("历史")
-            .onAppear { viewModel.reload() }
+            .onAppear {
+                viewModel.reload()
+                syncSelectionToLatest()
+            }
         }
     }
 
@@ -58,8 +62,17 @@ struct HistoryView: View {
     }
 
     private var trendCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("趋势（当前区间）").font(.headline)
+        let selectedPoint = nearestPoint(to: selectedTrendDate ?? Date.distantPast, in: viewModel.payload.dayCounts)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("趋势（当前区间）").font(.headline)
+                Spacer()
+                if let selectedPoint {
+                    trendTag(date: selectedPoint.date, count: selectedPoint.count)
+                }
+            }
+
             Chart {
                 ForEach(viewModel.payload.dayCounts) { point in
                     LineMark(
@@ -68,6 +81,13 @@ struct HistoryView: View {
                     )
                     .interpolationMethod(.linear)
                     .foregroundStyle(.blue)
+
+                    PointMark(
+                        x: .value("日期", point.date),
+                        y: .value("数量", point.count)
+                    )
+                    .symbolSize(28)
+                    .foregroundStyle(.blue.opacity(0.75))
 
                     if let ma = movingAverageValue(at: point.date, source: viewModel.payload.dayCounts, window: 7) {
                         LineMark(
@@ -80,32 +100,15 @@ struct HistoryView: View {
                     }
                 }
 
-                if let selectedDate = selectedTrendDate,
-                   let selectedPoint = nearestPoint(to: selectedDate, in: viewModel.payload.dayCounts) {
+                if let selectedPoint {
                     RuleMark(x: .value("选中日期", selectedPoint.date))
                         .foregroundStyle(.gray.opacity(0.35))
                     PointMark(
                         x: .value("选中日期", selectedPoint.date),
                         y: .value("数量", selectedPoint.count)
                     )
-                    .symbolSize(70)
+                    .symbolSize(80)
                     .foregroundStyle(.blue)
-                    .annotation(position: .top, alignment: .leading) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(selectedPoint.date.formatted(date: .abbreviated, time: .omitted))
-                            Text("数量：\(selectedPoint.count)")
-                        }
-                        .font(.caption2)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color(.systemBackground).opacity(0.96))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.25), lineWidth: 0.8)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
-                    }
                 }
             }
             .chartOverlay { proxy in
@@ -120,16 +123,18 @@ struct HistoryView: View {
                                         selectedTrendDate = date
                                     }
                                 }
-                                .onEnded { _ in
-                                    // 保留最后选中点，形成“可左右拖动查看”的体验
-                                }
                         )
+                }
+            }
+            .onAppear {
+                if selectedTrendDate == nil {
+                    selectedTrendDate = viewModel.payload.dayCounts.last?.date
                 }
             }
             .frame(height: 190)
 
             HStack(spacing: 12) {
-                Label("实际", systemImage: "waveform.path.ecg")
+                Label("折线", systemImage: "chart.xyaxis.line")
                     .font(.caption)
                     .foregroundStyle(.blue)
                 Label("7日均线", systemImage: "chart.line.uptrend.xyaxis")
@@ -150,15 +155,32 @@ struct HistoryView: View {
     }
 
     private var rollingTrendCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("近14天趋势").font(.headline)
+        let selectedPoint = nearestPoint(to: selectedRollingDate ?? Date.distantPast, in: viewModel.payload.rolling14DayCounts)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("近14天趋势").font(.headline)
+                Spacer()
+                if let selectedPoint {
+                    trendTag(date: selectedPoint.date, count: selectedPoint.count)
+                }
+            }
+
             Chart {
                 ForEach(viewModel.payload.rolling14DayCounts) { point in
-                    BarMark(
+                    LineMark(
                         x: .value("日期", point.date),
                         y: .value("数量", point.count)
                     )
-                    .foregroundStyle(.blue.opacity(0.35))
+                    .interpolationMethod(.linear)
+                    .foregroundStyle(.blue)
+
+                    PointMark(
+                        x: .value("日期", point.date),
+                        y: .value("数量", point.count)
+                    )
+                    .symbolSize(28)
+                    .foregroundStyle(.blue.opacity(0.75))
 
                     if let ma = movingAverageValue(at: point.date, source: viewModel.payload.rolling14DayCounts, window: 7) {
                         LineMark(
@@ -170,8 +192,7 @@ struct HistoryView: View {
                     }
                 }
 
-                if let selectedDate = selectedRollingDate,
-                   let selectedPoint = nearestPoint(to: selectedDate, in: viewModel.payload.rolling14DayCounts) {
+                if let selectedPoint {
                     RuleMark(x: .value("选中日期", selectedPoint.date))
                         .foregroundStyle(.gray.opacity(0.35))
                     PointMark(
@@ -179,22 +200,7 @@ struct HistoryView: View {
                         y: .value("数量", selectedPoint.count)
                     )
                     .foregroundStyle(.blue)
-                    .annotation(position: .top) {
-                        VStack(spacing: 2) {
-                            Text(selectedPoint.date.formatted(date: .abbreviated, time: .omitted))
-                            Text("数量：\(selectedPoint.count)")
-                        }
-                        .font(.caption2)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .background(Color(.systemBackground).opacity(0.96))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.25), lineWidth: 0.8)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
-                    }
+                    .symbolSize(80)
                 }
             }
             .chartOverlay { proxy in
@@ -209,10 +215,12 @@ struct HistoryView: View {
                                         selectedRollingDate = date
                                     }
                                 }
-                                .onEnded { _ in
-                                    // 保留最后选中点
-                                }
                         )
+                }
+            }
+            .onAppear {
+                if selectedRollingDate == nil {
+                    selectedRollingDate = viewModel.payload.rolling14DayCounts.last?.date
                 }
             }
             .frame(height: 190)
@@ -300,6 +308,24 @@ struct HistoryView: View {
         }
     }
 
+    @ViewBuilder
+    private func trendTag(date: Date, count: Int) -> some View {
+        HStack(spacing: 6) {
+            Text(date.formatted(date: .abbreviated, time: .omitted))
+            Text("\(count)")
+                .fontWeight(.semibold)
+        }
+        .font(.caption)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.systemBackground).opacity(0.96))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.25), lineWidth: 0.8)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
     private func movingAverageValue(at date: Date, source: [DayCountPoint], window: Int) -> Double? {
         guard window > 1 else { return nil }
         let sorted = source.sorted(by: { $0.date < $1.date })
@@ -323,11 +349,16 @@ struct HistoryView: View {
 
     private func heatColor(level: Double) -> Color {
         let clamped = min(max(level, 0), 1)
-        if clamped < 0.2 { return Color.blue.opacity(0.10) }
-        if clamped < 0.4 { return Color.cyan.opacity(0.30) }
-        if clamped < 0.6 { return Color.green.opacity(0.45) }
-        if clamped < 0.8 { return Color.orange.opacity(0.65) }
-        return Color.red.opacity(0.82)
+        if clamped < 0.2 { return Color.blue.opacity(0.12) }
+        if clamped < 0.4 { return Color.teal.opacity(0.35) }
+        if clamped < 0.6 { return Color.indigo.opacity(0.52) }
+        if clamped < 0.8 { return Color.purple.opacity(0.68) }
+        return Color.pink.opacity(0.84)
+    }
+
+    private func syncSelectionToLatest() {
+        selectedTrendDate = viewModel.payload.dayCounts.last?.date
+        selectedRollingDate = viewModel.payload.rolling14DayCounts.last?.date
     }
 
     private var triggerCard: some View {
