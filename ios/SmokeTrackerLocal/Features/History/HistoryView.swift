@@ -109,7 +109,8 @@ struct HistoryView: View {
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
-                                    let origin = geo[proxy.plotAreaFrame].origin
+                                    guard let plotFrame = proxy.plotFrame else { return }
+                                    let origin = geo[plotFrame].origin
                                     let x = value.location.x - origin.x
                                     if let date: Date = proxy.value(atX: x) {
                                         selectedTrendDate = date
@@ -193,7 +194,8 @@ struct HistoryView: View {
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
-                                    let origin = geo[proxy.plotAreaFrame].origin
+                                    guard let plotFrame = proxy.plotFrame else { return }
+                                    let origin = geo[plotFrame].origin
                                     let x = value.location.x - origin.x
                                     if let date: Date = proxy.value(atX: x) {
                                         selectedRollingDate = date
