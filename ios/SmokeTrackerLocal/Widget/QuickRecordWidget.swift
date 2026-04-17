@@ -4,7 +4,7 @@ import AppIntents
 
 private let quickRecordWidgetKind = "QuickRecordWidget"
 
-struct QuickRecordWidgetIntent: AppIntent {
+struct QuickRecordWidgetIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "快速记录"
     static var description = IntentDescription("从桌面快速记录一根烟")
 
