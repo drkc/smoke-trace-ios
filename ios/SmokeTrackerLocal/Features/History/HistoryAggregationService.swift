@@ -50,6 +50,11 @@ struct TriggerCountPoint: Identifiable {
     var id: String { trigger.rawValue }
 }
 
+private struct HeatmapSlot: Hashable {
+    let weekday: Int
+    let hour: Int
+}
+
 struct HeatmapCell: Identifiable {
     let weekday: Int   // 1...7, Monday first
     let hour: Int      // 0...23
@@ -230,13 +235,16 @@ struct HistoryAggregationService {
     }
 
     private func buildHeatmapCells(from logs: [SmokeLog]) -> [HeatmapCell] {
-        let grouped = Dictionary(grouping: logs) { (mondayFirstWeekday($0.createdAt), hourOfDay($0.createdAt)) }
-            .mapValues(\.count)
+        let grouped = Dictionary(grouping: logs) {
+            HeatmapSlot(weekday: mondayFirstWeekday($0.createdAt), hour: hourOfDay($0.createdAt))
+        }
+        .mapValues(\.count)
 
         var cells: [HeatmapCell] = []
         for weekday in 1...7 {
             for hour in 0...23 {
-                let count = grouped[(weekday, hour), default: 0]
+                let key = HeatmapSlot(weekday: weekday, hour: hour)
+                let count = grouped[key, default: 0]
                 cells.append(HeatmapCell(weekday: weekday, hour: hour, count: count))
             }
         }
