@@ -75,19 +75,11 @@ struct HistoryView: View {
 
             Chart {
                 ForEach(viewModel.payload.dayCounts) { point in
-                    LineMark(
+                    BarMark(
                         x: .value("日期", point.date),
                         y: .value("数量", point.count)
                     )
-                    .interpolationMethod(.linear)
-                    .foregroundStyle(.blue)
-
-                    PointMark(
-                        x: .value("日期", point.date),
-                        y: .value("数量", point.count)
-                    )
-                    .symbolSize(28)
-                    .foregroundStyle(.blue.opacity(0.75))
+                    .foregroundStyle(.blue.opacity(0.35))
 
                     if let ma = movingAverageValue(at: point.date, source: viewModel.payload.dayCounts, window: 7) {
                         LineMark(
@@ -134,7 +126,7 @@ struct HistoryView: View {
             .frame(height: 190)
 
             HStack(spacing: 12) {
-                Label("折线", systemImage: "chart.xyaxis.line")
+                Label("柱状", systemImage: "chart.bar")
                     .font(.caption)
                     .foregroundStyle(.blue)
                 Label("7日均线", systemImage: "chart.line.uptrend.xyaxis")
@@ -168,19 +160,11 @@ struct HistoryView: View {
 
             Chart {
                 ForEach(viewModel.payload.rolling14DayCounts) { point in
-                    LineMark(
+                    BarMark(
                         x: .value("日期", point.date),
                         y: .value("数量", point.count)
                     )
-                    .interpolationMethod(.linear)
-                    .foregroundStyle(.blue)
-
-                    PointMark(
-                        x: .value("日期", point.date),
-                        y: .value("数量", point.count)
-                    )
-                    .symbolSize(28)
-                    .foregroundStyle(.blue.opacity(0.75))
+                    .foregroundStyle(.blue.opacity(0.35))
 
                     if let ma = movingAverageValue(at: point.date, source: viewModel.payload.rolling14DayCounts, window: 7) {
                         LineMark(
