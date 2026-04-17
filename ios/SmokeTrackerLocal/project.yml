@@ -21,9 +21,11 @@ targets:
       - path: Domain
       - path: Features
       - path: Resources
+      - path: Shared
     settings:
       base:
         PRODUCT_NAME: SmokeTrackerLocal
+        CODE_SIGN_ENTITLEMENTS: App/SmokeTrackerLocal.entitlements
     info:
       path: App/Info.plist
       properties:
@@ -32,4 +34,25 @@ targets:
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-    dependencies: []
+    dependencies:
+      - target: SmokeTrackerWidget
+        embed: true
+
+  SmokeTrackerWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ../SmokeTrackerWidget
+      - path: Widget
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_NAME: SmokeTrackerWidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.YHG.vmys.widget
+        SKIP_INSTALL: YES
+        CODE_SIGN_ENTITLEMENTS: ../SmokeTrackerWidget/SmokeTrackerWidget.entitlements
+    info:
+      path: ../SmokeTrackerWidget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension

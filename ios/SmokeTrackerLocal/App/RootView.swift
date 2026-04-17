@@ -44,6 +44,7 @@ struct RootView: View {
         .onAppear {
             _ = AppSetting.fetchOrCreate(in: modelContext)
             refreshLockStateForCurrentSetting()
+            WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -53,6 +54,7 @@ struct RootView: View {
                 }
             case .active:
                 refreshLockStateForCurrentSetting()
+                WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
             @unknown default:
                 break
             }
