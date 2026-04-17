@@ -53,7 +53,7 @@ struct PinSetupView: View {
             return
         }
 
-        guard pin.allSatisfy(\\.isNumber) else {
+        guard pin.allSatisfy({ $0.isNumber }) else {
             message = "PIN 仅支持数字"
             return
         }
