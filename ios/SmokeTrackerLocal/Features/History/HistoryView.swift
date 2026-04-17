@@ -66,7 +66,7 @@ struct HistoryView: View {
                         x: .value("日期", point.date),
                         y: .value("数量", point.count)
                     )
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.linear)
                     .foregroundStyle(.blue)
 
                     if let ma = movingAverageValue(at: point.date, source: viewModel.payload.dayCounts, window: 7) {
@@ -74,7 +74,7 @@ struct HistoryView: View {
                             x: .value("日期", point.date),
                             y: .value("7日均线", ma)
                         )
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.linear)
                         .foregroundStyle(.orange)
                         .lineStyle(StrokeStyle(lineWidth: 2, dash: [6, 4]))
                     }
@@ -96,9 +96,15 @@ struct HistoryView: View {
                             Text("数量：\(selectedPoint.count)")
                         }
                         .font(.caption2)
-                        .padding(6)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemBackground).opacity(0.96))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.gray.opacity(0.25), lineWidth: 0.8)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
                     }
                 }
             }
@@ -113,6 +119,9 @@ struct HistoryView: View {
                                     if let date: Date = proxy.value(atX: x) {
                                         selectedTrendDate = date
                                     }
+                                }
+                                .onEnded { _ in
+                                    // 保留最后选中点，形成“可左右拖动查看”的体验
                                 }
                         )
                 }
@@ -176,9 +185,15 @@ struct HistoryView: View {
                             Text("数量：\(selectedPoint.count)")
                         }
                         .font(.caption2)
-                        .padding(6)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(Color(.systemBackground).opacity(0.96))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.gray.opacity(0.25), lineWidth: 0.8)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
                     }
                 }
             }
@@ -193,6 +208,9 @@ struct HistoryView: View {
                                     if let date: Date = proxy.value(atX: x) {
                                         selectedRollingDate = date
                                     }
+                                }
+                                .onEnded { _ in
+                                    // 保留最后选中点
                                 }
                         )
                 }
