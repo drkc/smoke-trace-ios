@@ -50,6 +50,14 @@ struct TriggerCountPoint: Identifiable {
     var id: String { trigger.rawValue }
 }
 
+struct HeatmapCell: Identifiable {
+    let weekday: Int   // 1...7, Monday first
+    let hour: Int      // 0...23
+    let count: Int
+
+    var id: String { "\(weekday)-\(hour)" }
+}
+
 struct HistoryLogItem: Identifiable {
     let id: String
     let createdAt: Date
@@ -61,6 +69,8 @@ struct HistoryPayload {
     let summary: HistorySummary
     let dayCounts: [DayCountPoint]
     let triggerCounts: [TriggerCountPoint]
+    let heatmapCells: [HeatmapCell]
+    let rolling14DayCounts: [DayCountPoint]
     let details: [HistoryLogItem]
 }
 
@@ -125,7 +135,17 @@ struct HistoryAggregationService {
             .sorted(by: { $0.createdAt > $1.createdAt })
             .map { HistoryLogItem(id: $0.id, createdAt: $0.createdAt, trigger: $0.triggerPrimary, minutesSinceLast: $0.minutesSinceLast) }
 
-        return HistoryPayload(summary: summary, dayCounts: dayBuckets, triggerCounts: triggerCounts, details: details)
+        let heatmapCells = buildHeatmapCells(from: logs)
+        let rolling14 = buildRolling14DayCounts(anchor: anchor, logs: logs)
+
+        return HistoryPayload(
+            summary: summary,
+            dayCounts: dayBuckets,
+            triggerCounts: triggerCounts,
+            heatmapCells: heatmapCells,
+            rolling14DayCounts: rolling14,
+            details: details
+        )
     }
 
     private func makeStats(logs: [SmokeLog], dayCount: Int) -> StatsSnapshot {
@@ -194,6 +214,51 @@ struct HistoryAggregationService {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         return calendar.startOfDay(for: date)
+    }
+
+    private func mondayFirstWeekday(_ date: Date) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let weekday = calendar.component(.weekday, from: date) // Sun=1 ... Sat=7
+        return weekday == 1 ? 7 : weekday - 1                // Mon=1 ... Sun=7
+    }
+
+    private func hourOfDay(_ date: Date) -> Int {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar.component(.hour, from: date)
+    }
+
+    private func buildHeatmapCells(from logs: [SmokeLog]) -> [HeatmapCell] {
+        let grouped = Dictionary(grouping: logs) { (mondayFirstWeekday($0.createdAt), hourOfDay($0.createdAt)) }
+            .mapValues(\.count)
+
+        var cells: [HeatmapCell] = []
+        for weekday in 1...7 {
+            for hour in 0...23 {
+                let count = grouped[(weekday, hour), default: 0]
+                cells.append(HeatmapCell(weekday: weekday, hour: hour, count: count))
+            }
+        }
+        return cells
+    }
+
+    private func buildRolling14DayCounts(anchor: Date, logs: [SmokeLog]) -> [DayCountPoint] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: anchor))!
+        let start = calendar.date(byAdding: .day, value: -13, to: calendar.startOfDay(for: anchor))!
+
+        let inRange = logs.filter { $0.createdAt >= start && $0.createdAt < end }
+        let dayMap = Dictionary(grouping: inRange) { dayStart(for: $0.createdAt) }.mapValues(\.count)
+
+        var result: [DayCountPoint] = []
+        for i in 0..<14 {
+            let d = calendar.date(byAdding: .day, value: i, to: start)!
+            result.append(DayCountPoint(date: d, count: dayMap[d, default: 0]))
+        }
+        return result
     }
 
     private func pctDelta(current: Int, previous: Int) -> Double? {

@@ -20,6 +20,8 @@ struct HistoryView: View {
 
                     summaryCard
                     trendCard
+                    rollingTrendCard
+                    heatmapCard
                     triggerCard
                     detailCard
                 }
@@ -55,12 +57,13 @@ struct HistoryView: View {
 
     private var trendCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("趋势").font(.headline)
+            Text("趋势（当前区间）").font(.headline)
             Chart(viewModel.payload.dayCounts) { point in
                 LineMark(
                     x: .value("日期", point.date),
                     y: .value("数量", point.count)
                 )
+                .interpolationMethod(.catmullRom)
             }
             .frame(height: 180)
 
@@ -74,6 +77,67 @@ struct HistoryView: View {
         .padding()
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var rollingTrendCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("近14天趋势").font(.headline)
+            Chart(viewModel.payload.rolling14DayCounts) { point in
+                BarMark(
+                    x: .value("日期", point.date),
+                    y: .value("数量", point.count)
+                )
+            }
+            .frame(height: 180)
+
+            Text("固定窗口，不受日/周/月切换影响")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var heatmapCard: some View {
+        let maxCount = max(1, viewModel.payload.heatmapCells.map(\.count).max() ?? 1)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("时段热力图（周 × 小时）").font(.headline)
+
+            Chart(viewModel.payload.heatmapCells) { cell in
+                RectangleMark(
+                    x: .value("小时", cell.hour),
+                    y: .value("星期", weekdayLabel(cell.weekday))
+                )
+                .foregroundStyle(
+                    .blue.opacity(0.12 + 0.88 * Double(cell.count) / Double(maxCount))
+                )
+            }
+            .chartYScale(domain: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"])
+            .frame(height: 220)
+
+            Text("颜色越深表示该时段记录越多")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func weekdayLabel(_ weekday: Int) -> String {
+        switch weekday {
+        case 1: return "周一"
+        case 2: return "周二"
+        case 3: return "周三"
+        case 4: return "周四"
+        case 5: return "周五"
+        case 6: return "周六"
+        default: return "周日"
+        }
     }
 
     private var triggerCard: some View {

@@ -62,6 +62,8 @@ extension HistoryPayload {
         ),
         dayCounts: [],
         triggerCounts: [],
+        heatmapCells: [],
+        rolling14DayCounts: [],
         details: []
     )
 }
