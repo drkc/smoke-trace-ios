@@ -42,7 +42,7 @@ jobs:
           xcodebuild \
             -project "$PROJECT_FILE" \
             -scheme "$SCHEME" \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             -quiet \
             build
