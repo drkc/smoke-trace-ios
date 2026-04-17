@@ -27,7 +27,7 @@ struct WorkerExportPayload: Decodable {
 
 struct WorkerExportLog: Decodable {
     let id: String
-    let createdAt: Date
+    let createdAt: Date?
     let triggerPrimary: String
     let triggerSecondary: String?
     let delayed10min: Int?
@@ -49,7 +49,7 @@ struct WorkerExportLog: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
-        createdAt = try container.decodeLossyDate(forKey: .createdAt)
+        createdAt = container.decodeLossyDateIfPresent(forKey: .createdAt)
         triggerPrimary = try container.decode(String.self, forKey: .triggerPrimary)
         triggerSecondary = container.decodeLossyStringIfPresent(forKey: .triggerSecondary)
         delayed10min = container.decodeLossyIntIfPresent(forKey: .delayed10min)
@@ -117,10 +117,6 @@ private enum DateParsers {
 
 private extension KeyedDecodingContainer {
     func decodeLossyDate(forKey key: Key) throws -> Date {
-        if let dateValue = try? decode(Date.self, forKey: key) {
-            return dateValue
-        }
-
         if let stringValue = try? decode(String.self, forKey: key),
            let parsed = DateParsers.parseDateString(stringValue) {
             return parsed
@@ -132,6 +128,10 @@ private extension KeyedDecodingContainer {
 
         if let doubleValue = try? decode(Double.self, forKey: key) {
             return DateParsers.parseUnixTimestamp(doubleValue)
+        }
+
+        if let dateValue = try? decode(Date.self, forKey: key) {
+            return dateValue
         }
 
         throw DecodingError.dataCorruptedError(

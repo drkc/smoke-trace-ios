@@ -5,6 +5,7 @@ enum WorkerImportError: LocalizedError {
     case emptyFile
     case invalidJSON
     case invalidShape
+    case noValidLog
 
     var errorDescription: String? {
         switch self {
@@ -14,6 +15,8 @@ enum WorkerImportError: LocalizedError {
             return "JSON 不是有效格式，请确认文件完整"
         case .invalidShape:
             return "JSON 结构不符合 Worker 导出格式（需要包含 logs 数组）"
+        case .noValidLog:
+            return "JSON 中没有可导入的有效日志（请检查 created_at / trigger_primary / id）"
         }
     }
 }
@@ -98,11 +101,26 @@ struct WorkerJsonImporter {
         var skipped = 0
         var duplicateCount = 0
         var invalidTriggerCount = 0
+        var invalidDateCount = 0
+        var invalidIDCount = 0
 
         var insertedTriggerMap: [TriggerPrimary: Int] = [:]
         var sourceTriggerMap: [TriggerPrimary: Int] = [:]
 
         for item in payload.logs {
+            let normalizedID = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedID.isEmpty else {
+                invalidIDCount += 1
+                skipped += 1
+                continue
+            }
+
+            guard let createdAt = item.createdAt else {
+                invalidDateCount += 1
+                skipped += 1
+                continue
+            }
+
             guard let trigger = TriggerPrimary(rawValue: item.triggerPrimary) else {
                 invalidTriggerCount += 1
                 skipped += 1
@@ -111,15 +129,15 @@ struct WorkerJsonImporter {
 
             sourceTriggerMap[trigger, default: 0] += 1
 
-            if existingIDs.contains(item.id) {
+            if existingIDs.contains(normalizedID) {
                 duplicateCount += 1
                 skipped += 1
                 continue
             }
 
             let log = SmokeLog(
-                id: item.id,
-                createdAt: item.createdAt,
+                id: normalizedID,
+                createdAt: createdAt,
                 triggerPrimary: trigger,
                 triggerSecondary: normalized(item.triggerSecondary),
                 delayed10min: (item.delayed10min ?? 0) == 1,
@@ -136,6 +154,8 @@ struct WorkerJsonImporter {
         if inserted > 0 {
             try context.save()
             try recalculateDerivedFields(context: context, timeZone: effectiveTimeZone)
+        } else if invalidDateCount > 0 || invalidIDCount > 0 {
+            throw WorkerImportError.noValidLog
         }
 
         let localAfter = try context.fetch(FetchDescriptor<SmokeLog>())
@@ -170,7 +190,8 @@ struct WorkerJsonImporter {
     }
 
     private func sourceDateRange(from logs: [WorkerExportLog]) -> DateRangeSummary? {
-        guard let minDate = logs.map(\.createdAt).min(), let maxDate = logs.map(\.createdAt).max() else {
+        let validDates = logs.compactMap(\.createdAt)
+        guard let minDate = validDates.min(), let maxDate = validDates.max() else {
             return nil
         }
         return DateRangeSummary(start: minDate, end: maxDate)
