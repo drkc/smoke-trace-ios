@@ -7,7 +7,6 @@ private let quickRecordWidgetKind = "QuickRecordWidget"
 struct QuickRecordWidgetIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "快速记录"
     static var description = IntentDescription("从桌面快速记录一根烟")
-    static var openAppWhenRun = true
 
     @Parameter(title: "触发类型")
     var trigger: TriggerTypeWidgetOption
