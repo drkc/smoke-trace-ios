@@ -7,7 +7,7 @@ struct WidgetQuickRecordRequest: Codable, Identifiable {
 }
 
 enum WidgetQuickRecordStore {
-    private static let suiteName = "group.com.drkc.smoke-trace-ios"
+    private static let suiteName = "group.LRS7YLA5GN.eY3UkMP"
     private static let storageKey = "widget.quick_record.queue"
 
     static func enqueue(triggerRawValue: String, createdAt: Date = Date()) {
