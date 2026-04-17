@@ -1,0 +1,87 @@
+name: iOS CI Build (SmokeTrackerLocal)
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+on:
+  push:
+    paths:
+      - 'ios/SmokeTrackerLocal/**'
+      - '.github/workflows/ios-smoketracker-build.yml'
+  pull_request:
+    paths:
+      - 'ios/SmokeTrackerLocal/**'
+      - '.github/workflows/ios-smoketracker-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    env:
+      SCHEME: SmokeTrackerLocal
+      PROJECT_DIR: ios/SmokeTrackerLocal
+      PROJECT_FILE: SmokeTrackerLocal.xcodeproj
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup XcodeGen
+        run: |
+          brew update
+          brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodebuild \
+            -project "$PROJECT_FILE" \
+            -scheme "$SCHEME" \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -configuration Debug \
+            -quiet \
+            build
+
+      - name: Build unsigned app for iOS Device
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "$PROJECT_FILE" \
+            -scheme "$SCHEME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned IPA artifact
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find build/DerivedData/Build/Products -type d -path '*Release-iphoneos/*.app' | head -n 1)"
+          if [ -z "${APP_PATH:-}" ] || [ ! -d "$APP_PATH" ]; then
+            echo "Unsigned app not found after device build."
+            find build -maxdepth 8 -type d -name '*.app' || true
+            exit 1
+          fi
+
+          mkdir -p build/unsigned/Payload
+          rm -rf build/unsigned/Payload/*.app
+          cp -R "$APP_PATH" build/unsigned/Payload/
+          (cd build/unsigned && /usr/bin/zip -qry ../${SCHEME}-unsigned.ipa Payload)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-artifacts
+          path: |
+            ios/SmokeTrackerLocal/build/SmokeTrackerLocal-unsigned.ipa
+          if-no-files-found: error
