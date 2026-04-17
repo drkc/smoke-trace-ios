@@ -109,13 +109,25 @@ struct HistoryView: View {
             Chart(viewModel.payload.heatmapCells) { cell in
                 RectangleMark(
                     x: .value("小时", cell.hour),
-                    y: .value("星期", weekdayLabel(cell.weekday))
+                    y: .value("星期", cell.weekday)
                 )
                 .foregroundStyle(
                     .blue.opacity(0.12 + 0.88 * Double(cell.count) / Double(maxCount))
                 )
             }
-            .chartYScale(domain: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"])
+            .chartYScale(domain: 1...7)
+            .chartYAxis {
+                AxisMarks(values: [1, 2, 3, 4, 5, 6, 7]) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    if let day = value.as(Int.self) {
+                        AxisValueLabel(weekdayLabel(day))
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: [0, 4, 8, 12, 16, 20, 23])
+            }
             .frame(height: 220)
 
             Text("颜色越深表示该时段记录越多")
