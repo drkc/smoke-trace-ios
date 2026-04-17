@@ -23,19 +23,27 @@ final class HomeViewModel: ObservableObject {
     @Published var sinceLastText: String = "-"
 
     private let context: ModelContext
-    private let logWriter: LogWriteService
+    private var logWriter: LogWriteService
+    private var suggestionEngineEnabled: Bool = true
 
-    init(context: ModelContext, timeZone: TimeZone = .current) {
+    init(context: ModelContext, setting: AppSetting? = nil) {
         self.context = context
-        self.logWriter = LogWriteService(timeZone: timeZone)
+        let resolvedSetting = setting ?? AppSetting()
+        self.logWriter = LogWriteService(timeZone: HomeViewModel.resolveTimeZone(from: resolvedSetting.timezoneIdentifier))
+        self.suggestionEngineEnabled = resolvedSetting.suggestionEngineEnabled
+        refreshSummary()
+    }
+
+    func apply(setting: AppSetting) {
+        logWriter = LogWriteService(timeZone: Self.resolveTimeZone(from: setting.timezoneIdentifier))
+        suggestionEngineEnabled = setting.suggestionEngineEnabled
         refreshSummary()
     }
 
     func refreshSummary() {
         let logs = fetchAllLogs()
         todayCountText = String(StatsService.countInDay(for: Date(), logs: logs, timeZone: logWriter.timeZone))
-        sinceLastText = StatsService.minutesFromNow(to: logs.sorted(by: { $0.createdAt > $1.createdAt }).first?.createdAt)
-            .map(String.init) ?? "-"
+        sinceLastText = formatSinceLastText(minutes: StatsService.minutesFromNow(to: logs.sorted(by: { $0.createdAt > $1.createdAt }).first?.createdAt))
     }
 
     func quickLog(trigger: TriggerPrimary) {
@@ -52,13 +60,13 @@ final class HomeViewModel: ObservableObject {
             )
 
             let pace = calcVsYesterdaySoFar(logs: fetchAllLogs(), at: log.createdAt)
-            let tip = TipPool.nextTip(
+            let tip = suggestionEngineEnabled ? TipPool.nextTip(
                 trigger: trigger,
                 minutesSinceLast: log.minutesSinceLast,
                 countInDay: log.countInDay,
                 delayed10min: false,
                 vsYesterdaySoFar: pace
-            )
+            ) : nil
 
             feedback = HomeFeedback(
                 title: "已记录",
@@ -107,13 +115,13 @@ final class HomeViewModel: ObservableObject {
             )
 
             let pace = calcVsYesterdaySoFar(logs: fetchAllLogs(), at: log.createdAt)
-            let tip = TipPool.nextTip(
+            let tip = suggestionEngineEnabled ? TipPool.nextTip(
                 trigger: trigger,
                 minutesSinceLast: log.minutesSinceLast,
                 countInDay: log.countInDay,
                 delayed10min: delayed10min,
                 vsYesterdaySoFar: pace
-            )
+            ) : nil
 
             feedback = HomeFeedback(
                 title: "补记已保存",
@@ -177,13 +185,13 @@ final class HomeViewModel: ObservableObject {
             try logWriter.markDelayed(in: context, log: latest)
 
             let pace = calcVsYesterdaySoFar(logs: fetchAllLogs(), at: Date())
-            let tip = TipPool.nextTip(
+            let tip = suggestionEngineEnabled ? TipPool.nextTip(
                 trigger: latest.triggerPrimary,
                 minutesSinceLast: latest.minutesSinceLast,
                 countInDay: latest.countInDay,
                 delayed10min: true,
                 vsYesterdaySoFar: pace
-            )
+            ) : nil
 
             feedback = HomeFeedback(
                 title: "已标记",
@@ -226,5 +234,22 @@ final class HomeViewModel: ObservableObject {
 
     private func fetchAllLogs() -> [SmokeLog] {
         (try? context.fetch(FetchDescriptor<SmokeLog>())) ?? []
+    }
+
+    private static func resolveTimeZone(from identifier: String) -> TimeZone {
+        TimeZone(identifier: identifier) ?? .current
+    }
+
+    private func formatSinceLastText(minutes: Int?) -> String {
+        guard let minutes else { return "-" }
+        if minutes <= 0 { return "刚刚" }
+        if minutes < 60 { return "\(minutes) 分钟" }
+
+        let hours = minutes / 60
+        let remain = minutes % 60
+        if remain == 0 {
+            return "\(hours) 小时"
+        }
+        return "\(hours) 小时 \(remain) 分钟"
     }
 }

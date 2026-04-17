@@ -26,3 +26,16 @@ final class AppSetting {
         self.suggestionEngineEnabled = suggestionEngineEnabled
     }
 }
+
+extension AppSetting {
+    static func fetchOrCreate(in context: ModelContext) -> AppSetting {
+        if let existing = try? context.fetch(FetchDescriptor<AppSetting>()).first(where: { $0.id == 1 }) {
+            return existing
+        }
+
+        let setting = AppSetting(id: 1)
+        context.insert(setting)
+        try? context.save()
+        return setting
+    }
+}

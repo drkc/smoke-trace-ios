@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @StateObject var viewModel: HomeViewModel
     @State private var showBackfill = false
+    private let summaryRefreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,9 @@ struct HomeView: View {
             .onAppear {
                 viewModel.refreshSummary()
             }
+            .onReceive(summaryRefreshTimer) { _ in
+                viewModel.refreshSummary()
+            }
         }
     }
 
@@ -58,7 +62,7 @@ struct HomeView: View {
                     .foregroundStyle(.secondary)
                 Text(viewModel.todayCountText)
                     .font(.system(size: 36, weight: .bold))
-                Text("距上一根: \(viewModel.sinceLastText) 分钟")
+                Text("距上一根: \(viewModel.sinceLastText)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

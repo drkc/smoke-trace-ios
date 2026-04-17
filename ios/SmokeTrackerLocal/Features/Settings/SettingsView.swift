@@ -3,13 +3,66 @@ import SwiftData
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var settings: [AppSetting]
+
     @State private var showImport = false
     @State private var exportMessage: String?
     @State private var showClearConfirm = false
 
+    @State private var pinEnabledToggle = false
+    @State private var biometricsToggle = false
+    @State private var suggestionEngineToggle = true
+    @State private var timezoneSelection = TimeZone.current.identifier
+    @State private var showPinSetup = false
+
+    private let timezoneOptions = [
+        "Asia/Hong_Kong",
+        "Asia/Shanghai",
+        "UTC"
+    ]
+
     var body: some View {
         NavigationStack {
             Form {
+                Section("安全") {
+                    Toggle("启用 PIN 锁", isOn: Binding(
+                        get: { pinEnabledToggle },
+                        set: { setPinEnabled($0) }
+                    ))
+
+                    Toggle("启用生物识别", isOn: Binding(
+                        get: { biometricsToggle },
+                        set: { setBiometricsEnabled($0) }
+                    ))
+                    .disabled(!pinEnabledToggle)
+
+                    if pinEnabledToggle {
+                        Button("修改 PIN") {
+                            showPinSetup = true
+                        }
+                    }
+                }
+
+                Section("行为") {
+                    Toggle("开启即时提示", isOn: Binding(
+                        get: { suggestionEngineToggle },
+                        set: { setSuggestionEngineEnabled($0) }
+                    ))
+
+                    Picker("统计时区", selection: Binding(
+                        get: { timezoneSelection },
+                        set: { setTimezoneIdentifier($0) }
+                    )) {
+                        ForEach(timezonePickerOptions, id: \.self) { id in
+                            Text(timezoneLabel(for: id)).tag(id)
+                        }
+                    }
+
+                    Text("仅影响统计口径，不修改原始记录")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("数据迁移") {
                     Button("导入 Worker 导出 JSON") {
                         showImport = true
@@ -38,12 +91,131 @@ struct SettingsView: View {
             .sheet(isPresented: $showImport) {
                 ImportView()
             }
+            .sheet(isPresented: $showPinSetup) {
+                PinSetupView(title: pinEnabledToggle ? "修改 PIN" : "设置 PIN") { newPin in
+                    savePIN(newPin)
+                }
+            }
             .confirmationDialog("确认清空所有记录？", isPresented: $showClearConfirm) {
                 Button("确认清空", role: .destructive) {
                     clearAll()
                 }
                 Button("取消", role: .cancel) {}
             }
+            .onAppear {
+                _ = AppSetting.fetchOrCreate(in: modelContext)
+                syncToggleState()
+            }
+            .onChange(of: settings.count) { _, _ in
+                syncToggleState()
+            }
+        }
+    }
+
+    private var setting: AppSetting {
+        settings.first ?? AppSetting.fetchOrCreate(in: modelContext)
+    }
+
+    private var timezonePickerOptions: [String] {
+        let current = setting.timezoneIdentifier
+        var options = timezoneOptions
+        if !options.contains(current) {
+            options.insert(current, at: 0)
+        }
+        return options
+    }
+
+    private func timezoneLabel(for identifier: String) -> String {
+        switch identifier {
+        case "Asia/Hong_Kong":
+            return "香港时间（Asia/Hong_Kong）"
+        case "Asia/Shanghai":
+            return "北京时间（Asia/Shanghai）"
+        case "UTC":
+            return "UTC"
+        default:
+            return identifier
+        }
+    }
+
+    private func syncToggleState() {
+        pinEnabledToggle = setting.pinEnabled
+        biometricsToggle = setting.pinEnabled && setting.biometricsEnabled
+        suggestionEngineToggle = setting.suggestionEngineEnabled
+        timezoneSelection = setting.timezoneIdentifier
+    }
+
+    private func setPinEnabled(_ enabled: Bool) {
+        if enabled {
+            showPinSetup = true
+            return
+        }
+
+        setting.pinEnabled = false
+        setting.biometricsEnabled = false
+        saveSetting()
+        syncToggleState()
+    }
+
+    private func setBiometricsEnabled(_ enabled: Bool) {
+        guard pinEnabledToggle else {
+            biometricsToggle = false
+            return
+        }
+
+        if !enabled {
+            setting.biometricsEnabled = false
+            saveSetting()
+            syncToggleState()
+            return
+        }
+
+        guard AppLockService.canEvaluateBiometrics() else {
+            exportMessage = "当前设备不可用生物识别"
+            biometricsToggle = false
+            return
+        }
+
+        Task {
+            let ok = await AppLockService.authenticateWithBiometrics(reason: "启用生物识别解锁")
+            await MainActor.run {
+                if ok {
+                    setting.biometricsEnabled = true
+                    saveSetting()
+                    syncToggleState()
+                } else {
+                    exportMessage = "生物识别验证未通过，未启用"
+                    biometricsToggle = false
+                }
+            }
+        }
+    }
+
+    private func setSuggestionEngineEnabled(_ enabled: Bool) {
+        setting.suggestionEngineEnabled = enabled
+        saveSetting()
+        syncToggleState()
+    }
+
+    private func setTimezoneIdentifier(_ identifier: String) {
+        setting.timezoneIdentifier = identifier
+        saveSetting()
+        syncToggleState()
+    }
+
+    private func savePIN(_ pin: String) {
+        setting.pinHash = AppLockService.hashPIN(pin)
+        setting.pinEnabled = true
+        saveSetting()
+        syncToggleState()
+        exportMessage = "PIN 已保存"
+    }
+
+    private func saveSetting() {
+        do {
+            try modelContext.save()
+        } catch {
+            exportMessage = "设置保存失败：\(error.localizedDescription)"
         }
     }
 
