@@ -6,7 +6,7 @@ struct FeedbackCard: View {
     let onMarkDelayed: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        AppCard {
             Text(feedback.title)
                 .font(.headline)
 
@@ -41,8 +41,5 @@ struct FeedbackCard: View {
                 }
             }
         }
-        .padding()
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }

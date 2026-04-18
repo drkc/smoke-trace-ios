@@ -11,7 +11,7 @@ struct HomeView: View {
                 VStack(spacing: 14) {
                     summaryCard
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    AppCard {
                         HStack {
                             Text("这根是因为什么？")
                                 .font(.headline)
@@ -31,9 +31,6 @@ struct HomeView: View {
                             .buttonStyle(.bordered)
                         }
                     }
-                    .padding()
-                    .background(.thinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
 
                     if let feedback = viewModel.feedback {
                         FeedbackCard(
@@ -61,22 +58,21 @@ struct HomeView: View {
     }
 
     private var summaryCard: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("今日已抽")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(viewModel.todayCountText)
-                    .font(.system(size: 36, weight: .bold))
-                    .monospacedDigit()
-                Text("距上一根: \(viewModel.sinceLastText)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+        AppCard {
+            HStack {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("今日已抽")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text(viewModel.todayCountText)
+                        .font(.system(size: 36, weight: .bold))
+                        .monospacedDigit()
+                    Text("距上一根: \(viewModel.sinceLastText)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
             }
-            Spacer()
         }
-        .padding()
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
