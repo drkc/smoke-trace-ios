@@ -88,18 +88,26 @@ struct QuickRecordWidgetView: View {
     }
 
     private var smallContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("快速记录")
                 .font(.headline)
 
-            HStack(spacing: 8) {
+            VStack(spacing: 8) {
                 ForEach(entry.smallChoices, id: \.self) { choice in
                     Button(intent: QuickRecordActionIntent(trigger: choice)) {
-                        Text(choice.zhLabel)
-                            .font(.caption)
-                            .frame(maxWidth: .infinity, minHeight: 34)
-                            .background(.regularMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        HStack {
+                            Text(choice.zhLabel)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Spacer()
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(.regularMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
                 }
