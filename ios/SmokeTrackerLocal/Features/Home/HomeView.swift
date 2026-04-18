@@ -12,8 +12,14 @@ struct HomeView: View {
                     summaryCard
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("这根是因为什么？")
-                            .font(.headline)
+                        HStack {
+                            Text("这根是因为什么？")
+                                .font(.headline)
+                            Spacer()
+                            Text("快捷记录")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         TriggerGrid { trigger in
                             viewModel.quickLog(trigger: trigger)
                         }
@@ -62,6 +68,7 @@ struct HomeView: View {
                     .foregroundStyle(.secondary)
                 Text(viewModel.todayCountText)
                     .font(.system(size: 36, weight: .bold))
+                    .monospacedDigit()
                 Text("距上一根: \(viewModel.sinceLastText)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
