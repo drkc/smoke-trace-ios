@@ -89,16 +89,14 @@ struct ActionButtonQuickRecordIntent: AppIntent {
 
 struct SmokeTrackerAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        [
-            AppShortcut(
-                intent: ActionButtonQuickRecordIntent(),
-                phrases: [
-                    "在 \(.applicationName) 快速记录",
-                    "用 \(.applicationName) 记录一根"
-                ],
-                shortTitle: "快速记录",
-                systemImageName: "plus.circle.fill"
-            )
-        ]
+        AppShortcut(
+            intent: ActionButtonQuickRecordIntent(),
+            phrases: [
+                "在 \(.applicationName) 快速记录",
+                "用 \(.applicationName) 记录一根"
+            ],
+            shortTitle: "快速记录",
+            systemImageName: "plus.circle.fill"
+        )
     }
 }
