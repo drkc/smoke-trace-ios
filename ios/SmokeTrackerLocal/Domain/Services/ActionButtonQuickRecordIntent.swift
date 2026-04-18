@@ -67,8 +67,8 @@ struct ActionButtonQuickRecordIntent: AppIntent {
 
     @Parameter(
         title: "触发原因",
-        optionsProvider: ActionButtonTriggerOptionsProvider(),
-        requestValueDialog: IntentDialog("请选择这次的触发原因")
+        requestValueDialog: IntentDialog("请选择这次的触发原因"),
+        optionsProvider: ActionButtonTriggerOptionsProvider()
     )
     var trigger: ActionButtonTriggerOption?
 
