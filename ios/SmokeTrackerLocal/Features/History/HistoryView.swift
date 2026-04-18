@@ -7,6 +7,7 @@ struct HistoryView: View {
     @State private var selectedRollingDate: Date?
     @State private var editingDraft: EditableHistoryLog?
     @State private var operationErrorMessage: String?
+    @State private var pendingDeleteLogID: String?
 
     var body: some View {
         NavigationStack {
@@ -40,9 +41,24 @@ struct HistoryView: View {
                         operationErrorMessage = viewModel.saveEditedLog(newDraft)
                     },
                     onDelete: { id in
-                        operationErrorMessage = viewModel.deleteLog(id: id)
+                        pendingDeleteLogID = id
                     }
                 )
+            }
+            .confirmationDialog("确认删除这条记录？", isPresented: Binding(
+                get: { pendingDeleteLogID != nil },
+                set: { shown in if !shown { pendingDeleteLogID = nil } }
+            )) {
+                Button("确认删除", role: .destructive) {
+                    if let id = pendingDeleteLogID {
+                        operationErrorMessage = viewModel.deleteLog(id: id)
+                    }
+                    pendingDeleteLogID = nil
+                    editingDraft = nil
+                }
+                Button("取消", role: .cancel) {
+                    pendingDeleteLogID = nil
+                }
             }
             .alert("操作失败", isPresented: Binding(
                 get: { operationErrorMessage != nil },
@@ -407,7 +423,7 @@ struct HistoryView: View {
                             .buttonStyle(.bordered)
 
                             Button("删除", role: .destructive) {
-                                operationErrorMessage = viewModel.deleteLog(id: item.id)
+                                pendingDeleteLogID = item.id
                             }
                             .buttonStyle(.bordered)
                         }

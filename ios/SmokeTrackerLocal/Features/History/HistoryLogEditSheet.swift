@@ -7,6 +7,7 @@ struct HistoryLogEditSheet: View {
     @State private var trigger: TriggerPrimary
     @State private var triggerSecondary: String
     @State private var delayed10min: Bool
+    @State private var showDeleteConfirm = false
 
     let onSave: (EditableHistoryLog) -> Void
     let onDelete: (String) -> Void
@@ -39,8 +40,7 @@ struct HistoryLogEditSheet: View {
 
                 Section {
                     Button("删除这条记录", role: .destructive) {
-                        onDelete(logID)
-                        dismiss()
+                        showDeleteConfirm = true
                     }
                 }
             }
@@ -63,6 +63,12 @@ struct HistoryLogEditSheet: View {
                         dismiss()
                     }
                 }
+            }
+            .confirmationDialog("确认删除这条记录？", isPresented: $showDeleteConfirm) {
+                Button("确认删除", role: .destructive) {
+                    onDelete(logID)
+                }
+                Button("取消", role: .cancel) {}
             }
         }
     }
