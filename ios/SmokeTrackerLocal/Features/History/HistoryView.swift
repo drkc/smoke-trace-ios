@@ -5,6 +5,8 @@ struct HistoryView: View {
     @StateObject var viewModel: HistoryViewModel
     @State private var selectedTrendDate: Date?
     @State private var selectedRollingDate: Date?
+    @State private var editingDraft: EditableHistoryLog?
+    @State private var operationErrorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -31,6 +33,27 @@ struct HistoryView: View {
                 .padding()
             }
             .navigationTitle("历史")
+            .sheet(item: $editingDraft) { draft in
+                HistoryLogEditSheet(
+                    draft: draft,
+                    onSave: { newDraft in
+                        operationErrorMessage = viewModel.saveEditedLog(newDraft)
+                    },
+                    onDelete: { id in
+                        operationErrorMessage = viewModel.deleteLog(id: id)
+                    }
+                )
+            }
+            .alert("操作失败", isPresented: Binding(
+                get: { operationErrorMessage != nil },
+                set: { shown in if !shown { operationErrorMessage = nil } }
+            )) {
+                Button("知道了", role: .cancel) {
+                    operationErrorMessage = nil
+                }
+            } message: {
+                Text(operationErrorMessage ?? "未知错误")
+            }
             .onAppear {
                 viewModel.reload()
                 syncSelectionToLatest()
@@ -371,11 +394,24 @@ struct HistoryView: View {
                 Text("暂无数据").foregroundStyle(.secondary)
             } else {
                 ForEach(viewModel.payload.details.prefix(50)) { item in
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
                         Text("\(item.trigger.zhLabel) · 间隔 \(item.minutesSinceLast?.description ?? "-") 分钟")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+
+                        HStack(spacing: 12) {
+                            Button("编辑") {
+                                editingDraft = viewModel.loadEditableLog(id: item.id)
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("删除", role: .destructive) {
+                                operationErrorMessage = viewModel.deleteLog(id: item.id)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .font(.caption)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     Divider()
