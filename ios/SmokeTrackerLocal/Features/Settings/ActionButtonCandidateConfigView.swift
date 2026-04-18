@@ -64,7 +64,9 @@ struct ActionButtonCandidateConfigView: View {
                     saveActionCandidates()
                 }
             }
-            EditButton()
+            ToolbarItem(placement: .topBarLeading) {
+                EditButton()
+            }
         }
         .onChange(of: enabledCount) { _, newValue in
             let maxCount = max(order.count, 1)
