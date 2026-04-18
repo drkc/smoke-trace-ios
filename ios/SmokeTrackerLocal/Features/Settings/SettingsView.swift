@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
@@ -14,6 +15,14 @@ struct SettingsView: View {
     @State private var suggestionEngineToggle = true
     @State private var timezoneSelection = TimeZone.current.identifier
     @State private var showPinSetup = false
+    @State private var widgetSmallPrimary = "idle_time"
+    @State private var widgetSmallSecondary = "after_meal"
+    @State private var widgetMedium1 = "idle_time"
+    @State private var widgetMedium2 = "after_meal"
+    @State private var widgetMedium3 = "stress"
+    @State private var widgetMedium4 = "social"
+    @State private var showWidgetConfigDuplicateAlert = false
+    @State private var widgetConfigAlertMessage = ""
 
     private let timezoneOptions = [
         "Asia/Hong_Kong",
@@ -63,6 +72,52 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section("小组件快捷触发") {
+                    Picker("小号按钮 1", selection: $widgetSmallPrimary) {
+                        ForEach(widgetTriggerOptions, id: \.self) { raw in
+                            Text(widgetOptionLabel(raw)).tag(raw)
+                        }
+                    }
+
+                    Picker("小号按钮 2", selection: $widgetSmallSecondary) {
+                        ForEach(widgetTriggerOptions, id: \.self) { raw in
+                            Text(widgetOptionLabel(raw)).tag(raw)
+                        }
+                    }
+
+                    Picker("中号按钮 1", selection: $widgetMedium1) {
+                        ForEach(widgetTriggerOptions, id: \.self) { raw in
+                            Text(widgetOptionLabel(raw)).tag(raw)
+                        }
+                    }
+
+                    Picker("中号按钮 2", selection: $widgetMedium2) {
+                        ForEach(widgetTriggerOptions, id: \.self) { raw in
+                            Text(widgetOptionLabel(raw)).tag(raw)
+                        }
+                    }
+
+                    Picker("中号按钮 3", selection: $widgetMedium3) {
+                        ForEach(widgetTriggerOptions, id: \.self) { raw in
+                            Text(widgetOptionLabel(raw)).tag(raw)
+                        }
+                    }
+
+                    Picker("中号按钮 4", selection: $widgetMedium4) {
+                        ForEach(widgetTriggerOptions, id: \.self) { raw in
+                            Text(widgetOptionLabel(raw)).tag(raw)
+                        }
+                    }
+
+                    Button("保存小组件触发设置") {
+                        saveWidgetQuickActions()
+                    }
+
+                    Text("规则：小号 2 按钮横向排列；中号 4 按钮。每组不允许重复，重复将弹窗并拒绝保存。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("数据迁移") {
                     Button("导入 Worker 导出 JSON") {
                         showImport = true
@@ -102,6 +157,11 @@ struct SettingsView: View {
                 }
                 Button("取消", role: .cancel) {}
             }
+            .alert("小组件设置未保存", isPresented: $showWidgetConfigDuplicateAlert) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text(widgetConfigAlertMessage)
+            }
             .onAppear {
                 _ = AppSetting.fetchOrCreate(in: modelContext)
                 syncToggleState()
@@ -125,6 +185,10 @@ struct SettingsView: View {
         return options
     }
 
+    private var widgetTriggerOptions: [String] {
+        TriggerPrimary.allCases.map(\.rawValue)
+    }
+
     private func timezoneLabel(for identifier: String) -> String {
         switch identifier {
         case "Asia/Hong_Kong":
@@ -138,11 +202,26 @@ struct SettingsView: View {
         }
     }
 
+    private func widgetOptionLabel(_ raw: String) -> String {
+        TriggerPrimary(rawValue: raw)?.zhLabel ?? raw
+    }
+
     private func syncToggleState() {
         pinEnabledToggle = setting.pinEnabled
         biometricsToggle = setting.pinEnabled && setting.biometricsEnabled
         suggestionEngineToggle = setting.suggestionEngineEnabled
         timezoneSelection = setting.timezoneIdentifier
+
+        let prefs = WidgetQuickRecordStore.loadPreferences()
+        let small = prefs.small + WidgetQuickRecordStore.defaultSmall
+        widgetSmallPrimary = small[0]
+        widgetSmallSecondary = small[1]
+
+        let medium = prefs.medium + WidgetQuickRecordStore.defaultMedium
+        widgetMedium1 = medium[0]
+        widgetMedium2 = medium[1]
+        widgetMedium3 = medium[2]
+        widgetMedium4 = medium[3]
     }
 
     private func setPinEnabled(_ enabled: Bool) {
@@ -209,6 +288,31 @@ struct SettingsView: View {
         saveSetting()
         syncToggleState()
         exportMessage = "PIN 已保存"
+    }
+
+    private func saveWidgetQuickActions() {
+        let small = [widgetSmallPrimary, widgetSmallSecondary]
+        if Set(small).count != small.count {
+            widgetConfigAlertMessage = "小号组件的两个按钮不能重复，请调整后再保存。"
+            showWidgetConfigDuplicateAlert = true
+            return
+        }
+
+        let medium = [widgetMedium1, widgetMedium2, widgetMedium3, widgetMedium4]
+        if Set(medium).count != medium.count {
+            widgetConfigAlertMessage = "中号组件的四个按钮不能重复，请调整后再保存。"
+            showWidgetConfigDuplicateAlert = true
+            return
+        }
+
+        let ok = WidgetQuickRecordStore.savePreferences(small: small, medium: medium)
+        if ok {
+            WidgetCenter.shared.reloadAllTimelines()
+            exportMessage = "小组件触发设置已保存"
+        } else {
+            widgetConfigAlertMessage = "保存失败，请重试。"
+            showWidgetConfigDuplicateAlert = true
+        }
     }
 
     private func saveSetting() {

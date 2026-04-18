@@ -6,7 +6,11 @@ private let quickRecordWidgetKind = "QuickRecordWidget"
 
 struct QuickRecordWidgetIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "快速记录"
-    static var description = IntentDescription("从桌面快速记录一根烟")
+    static var description = IntentDescription("桌面快速记录，可在设置里自定义按钮触发原因")
+}
+
+struct QuickRecordActionIntent: AppIntent {
+    static var title: LocalizedStringResource = "快速记录"
 
     @Parameter(title: "触发类型")
     var trigger: TriggerTypeWidgetOption
@@ -26,7 +30,7 @@ struct QuickRecordWidgetIntent: WidgetConfigurationIntent {
     }
 }
 
-enum TriggerTypeWidgetOption: String, AppEnum {
+enum TriggerTypeWidgetOption: String, AppEnum, CaseIterable {
     case afterWaking = "after_waking"
     case idleTime = "idle_time"
     case afterMeal = "after_meal"
@@ -61,15 +65,15 @@ enum TriggerTypeWidgetOption: String, AppEnum {
         case .other: return "其他"
         }
     }
+
+    static func from(rawValue: String) -> TriggerTypeWidgetOption {
+        TriggerTypeWidgetOption(rawValue: rawValue) ?? .idleTime
+    }
 }
 
 struct QuickRecordWidgetView: View {
     let entry: QuickRecordEntry
     @Environment(\.widgetFamily) private var family
-
-    private let quickChoices: [TriggerTypeWidgetOption] = [
-        .idleTime, .afterMeal, .stress, .social
-    ]
 
     var body: some View {
         Group {
@@ -84,29 +88,29 @@ struct QuickRecordWidgetView: View {
     }
 
     private var smallContent: some View {
-        Button(intent: QuickRecordWidgetIntent(trigger: entry.trigger)) {
-            VStack(spacing: 8) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(.orange)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("快速记录")
+                .font(.headline)
 
-                Text("快速记录")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-
-                Text("触发：\(entry.trigger.zhLabel)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if entry.pendingCount > 0 {
-                    Text("待入库：\(entry.pendingCount)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(entry.smallChoices, id: \.self) { choice in
+                    Button(intent: QuickRecordActionIntent(trigger: choice)) {
+                        Text(choice.zhLabel)
+                            .font(.caption)
+                            .frame(maxWidth: .infinity, minHeight: 34)
+                            .background(.regularMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if entry.pendingCount > 0 {
+                Text("待入库：\(entry.pendingCount)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .buttonStyle(.plain)
     }
 
     private var mediumContent: some View {
@@ -115,8 +119,8 @@ struct QuickRecordWidgetView: View {
                 .font(.headline)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                ForEach(quickChoices, id: \.self) { choice in
-                    Button(intent: QuickRecordWidgetIntent(trigger: choice)) {
+                ForEach(entry.mediumChoices, id: \.self) { choice in
+                    Button(intent: QuickRecordActionIntent(trigger: choice)) {
                         Text(choice.zhLabel)
                             .font(.caption)
                             .frame(maxWidth: .infinity, minHeight: 32)
@@ -127,16 +131,10 @@ struct QuickRecordWidgetView: View {
                 }
             }
 
-            HStack {
-                Text("默认触发：\(entry.trigger.zhLabel)")
+            if entry.pendingCount > 0 {
+                Text("待入库：\(entry.pendingCount)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Spacer()
-                if entry.pendingCount > 0 {
-                    Text("待入库：\(entry.pendingCount)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
     }
@@ -145,29 +143,37 @@ struct QuickRecordWidgetView: View {
 struct QuickRecordEntry: TimelineEntry {
     let date: Date
     let pendingCount: Int
-    let trigger: TriggerTypeWidgetOption
+    let smallChoices: [TriggerTypeWidgetOption]
+    let mediumChoices: [TriggerTypeWidgetOption]
 }
 
 struct QuickRecordProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> QuickRecordEntry {
-        QuickRecordEntry(date: .now, pendingCount: 0, trigger: .idleTime)
+        QuickRecordEntry(
+            date: .now,
+            pendingCount: 0,
+            smallChoices: WidgetQuickRecordStore.defaultSmall.map { TriggerTypeWidgetOption.from(rawValue: $0) },
+            mediumChoices: WidgetQuickRecordStore.defaultMedium.map { TriggerTypeWidgetOption.from(rawValue: $0) }
+        )
     }
 
     func snapshot(for configuration: QuickRecordWidgetIntent, in context: Context) async -> QuickRecordEntry {
-        QuickRecordEntry(
-            date: .now,
-            pendingCount: WidgetQuickRecordStore.pendingCount(),
-            trigger: configuration.trigger
-        )
+        buildEntry()
     }
 
     func timeline(for configuration: QuickRecordWidgetIntent, in context: Context) async -> Timeline<QuickRecordEntry> {
-        let entry = QuickRecordEntry(
+        let entry = buildEntry()
+        return Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(300)))
+    }
+
+    private func buildEntry() -> QuickRecordEntry {
+        let prefs = WidgetQuickRecordStore.loadPreferences()
+        return QuickRecordEntry(
             date: .now,
             pendingCount: WidgetQuickRecordStore.pendingCount(),
-            trigger: configuration.trigger
+            smallChoices: prefs.small.map { TriggerTypeWidgetOption.from(rawValue: $0) },
+            mediumChoices: prefs.medium.map { TriggerTypeWidgetOption.from(rawValue: $0) }
         )
-        return Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(300)))
     }
 }
 
@@ -179,7 +185,7 @@ struct QuickRecordWidget: Widget {
             QuickRecordWidgetView(entry: entry)
         }
         .configurationDisplayName("快速记录")
-        .description("桌面一键记一根，可在添加组件时指定默认触发")
+        .description("小号 2 按钮 / 中号 4 按钮，可在 App 设置中自定义")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
