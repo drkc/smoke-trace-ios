@@ -58,6 +58,10 @@ enum WidgetQuickRecordStore {
         )
     }
 
+    static func loadActionButtonChoices() -> [String] {
+        loadPreferences().medium
+    }
+
     static func savePreferences(small: [String], medium: [String]) -> Bool {
         let normalizedSmall = normalized(rawValues: small, fallback: defaultSmall, maxCount: 2)
         let normalizedMedium = normalized(rawValues: medium, fallback: defaultMedium, maxCount: 4)

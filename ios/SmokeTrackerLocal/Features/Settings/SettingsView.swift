@@ -113,7 +113,7 @@ struct SettingsView: View {
                         saveWidgetQuickActions()
                     }
 
-                    Text("规则：小号 2 按钮横向排列；中号 4 按钮。每组不允许重复，重复将弹窗并拒绝保存。")
+                    Text("规则：小号 2 按钮横向排列；中号 4 按钮；Action Button 弹窗也使用这 4 个选项。每组不允许重复，重复将弹窗并拒绝保存。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
