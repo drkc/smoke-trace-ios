@@ -1,9 +1,13 @@
 import SwiftUI
+import WidgetKit
 
 struct ActionButtonCandidateConfigView: View {
     @Binding var order: [String]
     @Binding var enabledCount: Int
     let labelForRaw: (String) -> String
+
+    @State private var saveMessage = ""
+    @State private var showSaveAlert = false
 
     private var clampedEnabledCount: Int {
         min(max(enabledCount, 1), max(order.count, 1))
@@ -55,15 +59,37 @@ struct ActionButtonCandidateConfigView: View {
         }
         .navigationTitle("Action Button 待选")
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("保存") {
+                    saveActionCandidates()
+                }
+            }
             EditButton()
         }
         .onChange(of: enabledCount) { _, newValue in
             let maxCount = max(order.count, 1)
             enabledCount = min(max(newValue, 1), maxCount)
         }
+        .alert("待选列表设置", isPresented: $showSaveAlert) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(saveMessage)
+        }
     }
 
     private func move(from source: IndexSet, to destination: Int) {
         order.move(fromOffsets: source, toOffset: destination)
+    }
+
+    private func saveActionCandidates() {
+        enabledCount = clampedEnabledCount
+        let ok = WidgetQuickRecordStore.saveActionButtonConfig(order: order, enabledCount: enabledCount)
+        if ok {
+            WidgetCenter.shared.reloadAllTimelines()
+            saveMessage = "Action Button 待选列表已保存"
+        } else {
+            saveMessage = "保存失败，请重试"
+        }
+        showSaveAlert = true
     }
 }

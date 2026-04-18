@@ -127,7 +127,7 @@ struct SettingsView: View {
                         saveWidgetQuickActions()
                     }
 
-                    Text("规则：小号 2 按钮横向排列；中号 4 按钮。Action Button 待选列表可在上方页面配置（1-8 项、可拖动排序）。小号/中号每组不允许重复，重复将弹窗并拒绝保存。")
+                    Text("规则：小号 2 按钮横向排列；中号 4 按钮。Action Button 待选列表可在上方页面配置（1-8 项、可拖动排序，并可在该页直接保存）。小号/中号每组不允许重复，重复将弹窗并拒绝保存。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

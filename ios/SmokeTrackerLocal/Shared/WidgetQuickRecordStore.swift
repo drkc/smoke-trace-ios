@@ -108,6 +108,16 @@ enum WidgetQuickRecordStore {
         return Array(config.order.prefix(config.enabledCount))
     }
 
+    static func saveActionButtonConfig(order: [String], enabledCount: Int) -> Bool {
+        let current = loadPreferences()
+        return savePreferences(
+            small: current.small,
+            medium: current.medium,
+            actionOrder: order,
+            actionEnabledCount: enabledCount
+        )
+    }
+
     static func savePreferences(
         small: [String],
         medium: [String],
