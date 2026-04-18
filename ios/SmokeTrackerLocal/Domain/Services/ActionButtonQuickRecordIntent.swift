@@ -61,8 +61,8 @@ struct ActionButtonTriggerOptionsProvider: DynamicOptionsProvider {
 }
 
 struct ActionButtonQuickRecordIntent: AppIntent {
-    static var title: LocalizedStringResource = "快速记录（动作按钮）"
-    static var description = IntentDescription("用于 Action Button：弹出触发原因并快速记录")
+    static var title: LocalizedStringResource = "快速记录（系统弹层）"
+    static var description = IntentDescription("不拉起 App，使用系统选择弹层进行快速记录")
     static var openAppWhenRun = false
 
     @Parameter(
@@ -93,6 +93,22 @@ struct ActionButtonQuickRecordIntent: AppIntent {
     }
 }
 
+struct ActionButtonLaunchPickerIntent: AppIntent {
+    static var title: LocalizedStringResource = "快速记录（拉起 App 面板）"
+    static var description = IntentDescription("拉起 App 后按设置位置显示选择面板：上置/居中/下置")
+    static var openAppWhenRun = true
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("打开 App 快速记录")
+    }
+
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        WidgetQuickRecordStore.requestLaunchPickerFromActionButton()
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result(dialog: IntentDialog("已打开记录面板"))
+    }
+}
+
 struct SmokeTrackerAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
@@ -101,8 +117,18 @@ struct SmokeTrackerAppShortcuts: AppShortcutsProvider {
                 "在 \(.applicationName) 快速记录",
                 "用 \(.applicationName) 记录一根"
             ],
-            shortTitle: "快速记录",
+            shortTitle: "快速记录（系统）",
             systemImageName: "plus.circle.fill"
+        )
+
+        AppShortcut(
+            intent: ActionButtonLaunchPickerIntent(),
+            phrases: [
+                "在 \(.applicationName) 打开记录面板",
+                "用 \(.applicationName) 拉起记录"
+            ],
+            shortTitle: "快速记录（拉起）",
+            systemImageName: "rectangle.portrait.and.arrow.right"
         )
     }
 }

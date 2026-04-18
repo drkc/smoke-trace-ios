@@ -21,6 +21,8 @@ struct SettingsView: View {
     @State private var widgetMedium2 = "after_meal"
     @State private var widgetMedium3 = "stress"
     @State private var widgetMedium4 = "social"
+    @State private var actionExecutionMode: ActionButtonExecutionMode = .systemChooser
+    @State private var actionPickerPosition: ActionButtonPickerPosition = .center
     @State private var actionCandidateOrder: [String] = TriggerPrimary.allCases.map(\.rawValue)
     @State private var actionCandidateEnabledCount = 4
     @State private var showWidgetConfigDuplicateAlert = false
@@ -111,6 +113,29 @@ struct SettingsView: View {
                         }
                     }
 
+                    Picker("Action Button 执行方式", selection: $actionExecutionMode) {
+                        ForEach(ActionButtonExecutionMode.allCases, id: \.rawValue) { mode in
+                            Text(mode.zhLabel).tag(mode)
+                        }
+                    }
+
+                    Picker("拉起面板位置", selection: $actionPickerPosition) {
+                        ForEach(ActionButtonPickerPosition.allCases, id: \.rawValue) { position in
+                            Text(position.zhLabel).tag(position)
+                        }
+                    }
+                    .disabled(actionExecutionMode != .launchAppPicker)
+
+                    if actionExecutionMode == .launchAppPicker {
+                        Text("请在系统 Action Button 中绑定“快速记录（拉起 App 面板）”。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("请在系统 Action Button 中绑定“快速记录（系统）”。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
                     NavigationLink("配置 Action Button 待选列表") {
                         ActionButtonCandidateConfigView(
                             order: $actionCandidateOrder,
@@ -127,7 +152,7 @@ struct SettingsView: View {
                         saveWidgetQuickActions()
                     }
 
-                    Text("规则：小号 2 按钮横向排列；中号 4 按钮。Action Button 待选列表可在上方页面配置（1-8 项、可拖动排序，并可在该页直接保存）。小号/中号每组不允许重复，重复将弹窗并拒绝保存。")
+                    Text("规则：小号 2 按钮横向排列；中号 4 按钮。Action Button 待选列表可在上方页面配置（1-8 项、可拖动排序，并可在该页直接保存）。执行方式支持系统弹层或拉起 App 面板（可选上置/居中/下置）。小号/中号每组不允许重复，重复将弹窗并拒绝保存。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -246,6 +271,8 @@ struct SettingsView: View {
         let actionConfig = WidgetQuickRecordStore.loadActionButtonConfig()
         actionCandidateOrder = actionConfig.order
         actionCandidateEnabledCount = actionConfig.enabledCount
+        actionExecutionMode = WidgetQuickRecordStore.loadActionButtonExecutionMode()
+        actionPickerPosition = WidgetQuickRecordStore.loadActionButtonPickerPosition()
     }
 
     private func setPinEnabled(_ enabled: Bool) {
@@ -333,7 +360,9 @@ struct SettingsView: View {
             small: small,
             medium: medium,
             actionOrder: actionCandidateOrder,
-            actionEnabledCount: actionCandidateEnabledCount
+            actionEnabledCount: actionCandidateEnabledCount,
+            actionExecutionMode: actionExecutionMode,
+            actionPickerPosition: actionPickerPosition
         )
         if ok {
             WidgetCenter.shared.reloadAllTimelines()

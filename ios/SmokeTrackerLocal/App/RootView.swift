@@ -7,6 +7,9 @@ struct RootView: View {
     @Query private var settings: [AppSetting]
 
     @State private var isUnlocked = true
+    @State private var showActionButtonLaunchPicker = false
+    @State private var launchPickerChoices: [TriggerPrimary] = []
+    @State private var launchPickerPosition: ActionButtonPickerPosition = .center
 
     var body: some View {
         let setting = effectiveSetting
@@ -35,16 +38,31 @@ struct RootView: View {
             if shouldShowLockGate {
                 AppLockView(
                     setting: setting,
-                    onUnlocked: { isUnlocked = true }
+                    onUnlocked: {
+                        isUnlocked = true
+                        presentLaunchPickerIfNeeded()
+                    }
                 )
                 .transition(.opacity)
                 .zIndex(1)
+            }
+
+            if showActionButtonLaunchPicker && !shouldShowLockGate {
+                ActionButtonLaunchPickerOverlay(
+                    choices: launchPickerChoices,
+                    position: launchPickerPosition,
+                    onSelect: handleLaunchPickerSelection,
+                    onCancel: { showActionButtonLaunchPicker = false }
+                )
+                .transition(.opacity)
+                .zIndex(2)
             }
         }
         .onAppear {
             _ = AppSetting.fetchOrCreate(in: modelContext)
             refreshLockStateForCurrentSetting()
             WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
+            presentLaunchPickerIfNeeded()
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -55,6 +73,7 @@ struct RootView: View {
             case .active:
                 refreshLockStateForCurrentSetting()
                 WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
+                presentLaunchPickerIfNeeded()
             @unknown default:
                 break
             }
@@ -62,6 +81,7 @@ struct RootView: View {
         .onChange(of: setting.pinEnabled) { _, enabled in
             if !enabled {
                 isUnlocked = true
+                presentLaunchPickerIfNeeded()
             }
         }
     }
@@ -80,5 +100,24 @@ struct RootView: View {
 
     private func refreshLockStateForCurrentSetting() {
         isUnlocked = !effectiveSetting.pinEnabled
+    }
+
+    private func presentLaunchPickerIfNeeded() {
+        guard !shouldShowLockGate else { return }
+        guard WidgetQuickRecordStore.consumeLaunchPickerRequest() else { return }
+
+        let rawChoices = WidgetQuickRecordStore.loadActionButtonChoices()
+        let mapped = rawChoices.compactMap(TriggerPrimary.init(rawValue:))
+        launchPickerChoices = mapped.isEmpty
+            ? WidgetQuickRecordStore.defaultMedium.compactMap(TriggerPrimary.init(rawValue:))
+            : mapped
+        launchPickerPosition = WidgetQuickRecordStore.loadActionButtonPickerPosition()
+        showActionButtonLaunchPicker = true
+    }
+
+    private func handleLaunchPickerSelection(_ trigger: TriggerPrimary) {
+        WidgetQuickRecordStore.enqueue(triggerRawValue: trigger.rawValue)
+        WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
+        showActionButtonLaunchPicker = false
     }
 }
