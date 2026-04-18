@@ -65,16 +65,12 @@ struct ActionButtonQuickRecordIntent: AppIntent {
     static var description = IntentDescription("用于 Action Button：弹出触发原因并快速记录")
     static var openAppWhenRun = false
 
-    @Parameter(title: "触发原因", optionsProvider: ActionButtonTriggerOptionsProvider())
+    @Parameter(
+        title: "触发原因",
+        optionsProvider: ActionButtonTriggerOptionsProvider(),
+        requestValueDialog: IntentDialog("请选择这次的触发原因")
+    )
     var trigger: ActionButtonTriggerOption
-
-    init() {
-        self.trigger = .idleTime
-    }
-
-    init(trigger: ActionButtonTriggerOption) {
-        self.trigger = trigger
-    }
 
     static var parameterSummary: some ParameterSummary {
         Summary("记录一根：\(\.$trigger)")
