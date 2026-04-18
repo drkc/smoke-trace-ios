@@ -21,6 +21,8 @@ struct SettingsView: View {
     @State private var widgetMedium2 = "after_meal"
     @State private var widgetMedium3 = "stress"
     @State private var widgetMedium4 = "social"
+    @State private var actionCandidateOrder: [String] = TriggerPrimary.allCases.map(\.rawValue)
+    @State private var actionCandidateEnabledCount = 4
     @State private var showWidgetConfigDuplicateAlert = false
     @State private var widgetConfigAlertMessage = ""
 
@@ -109,11 +111,23 @@ struct SettingsView: View {
                         }
                     }
 
+                    NavigationLink("配置 Action Button 待选列表") {
+                        ActionButtonCandidateConfigView(
+                            order: $actionCandidateOrder,
+                            enabledCount: $actionCandidateEnabledCount,
+                            labelForRaw: widgetOptionLabel
+                        )
+                    }
+
+                    Text("当前待选：\(actionCandidateEnabledCount) 项（\(actionCandidatePreviewText)）")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
                     Button("保存小组件触发设置") {
                         saveWidgetQuickActions()
                     }
 
-                    Text("规则：小号 2 按钮横向排列；中号 4 按钮；Action Button 弹窗也使用这 4 个选项。每组不允许重复，重复将弹窗并拒绝保存。")
+                    Text("规则：小号 2 按钮横向排列；中号 4 按钮。Action Button 待选列表可在上方页面配置（1-8 项、可拖动排序）。小号/中号每组不允许重复，重复将弹窗并拒绝保存。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -189,6 +203,12 @@ struct SettingsView: View {
         TriggerPrimary.allCases.map(\.rawValue)
     }
 
+    private var actionCandidatePreviewText: String {
+        let count = min(max(actionCandidateEnabledCount, 1), actionCandidateOrder.count)
+        let visible = actionCandidateOrder.prefix(count).map { widgetOptionLabel($0) }
+        return visible.joined(separator: "、")
+    }
+
     private func timezoneLabel(for identifier: String) -> String {
         switch identifier {
         case "Asia/Hong_Kong":
@@ -222,6 +242,10 @@ struct SettingsView: View {
         widgetMedium2 = medium[1]
         widgetMedium3 = medium[2]
         widgetMedium4 = medium[3]
+
+        let actionConfig = WidgetQuickRecordStore.loadActionButtonConfig()
+        actionCandidateOrder = actionConfig.order
+        actionCandidateEnabledCount = actionConfig.enabledCount
     }
 
     private func setPinEnabled(_ enabled: Bool) {
@@ -305,7 +329,12 @@ struct SettingsView: View {
             return
         }
 
-        let ok = WidgetQuickRecordStore.savePreferences(small: small, medium: medium)
+        let ok = WidgetQuickRecordStore.savePreferences(
+            small: small,
+            medium: medium,
+            actionOrder: actionCandidateOrder,
+            actionEnabledCount: actionCandidateEnabledCount
+        )
         if ok {
             WidgetCenter.shared.reloadAllTimelines()
             exportMessage = "小组件触发设置已保存"

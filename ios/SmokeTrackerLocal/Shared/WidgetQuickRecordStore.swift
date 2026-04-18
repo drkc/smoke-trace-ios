@@ -9,6 +9,35 @@ struct WidgetQuickRecordRequest: Codable, Identifiable {
 struct WidgetQuickRecordPreferences: Codable {
     let small: [String]
     let medium: [String]
+    let actionOrder: [String]
+    let actionEnabledCount: Int
+
+    init(small: [String], medium: [String], actionOrder: [String], actionEnabledCount: Int) {
+        self.small = small
+        self.medium = medium
+        self.actionOrder = actionOrder
+        self.actionEnabledCount = actionEnabledCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case small
+        case medium
+        case actionOrder
+        case actionEnabledCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.small = try container.decodeIfPresent([String].self, forKey: .small) ?? WidgetQuickRecordStore.defaultSmall
+        self.medium = try container.decodeIfPresent([String].self, forKey: .medium) ?? WidgetQuickRecordStore.defaultMedium
+        self.actionOrder = try container.decodeIfPresent([String].self, forKey: .actionOrder) ?? WidgetQuickRecordStore.defaultActionOrder
+        self.actionEnabledCount = try container.decodeIfPresent(Int.self, forKey: .actionEnabledCount) ?? WidgetQuickRecordStore.defaultActionEnabledCount
+    }
+}
+
+struct ActionButtonCandidateConfig {
+    let order: [String]
+    let enabledCount: Int
 }
 
 enum WidgetQuickRecordStore {
@@ -18,8 +47,7 @@ enum WidgetQuickRecordStore {
 
     static let defaultSmall: [String] = ["idle_time", "after_meal"]
     static let defaultMedium: [String] = ["idle_time", "after_meal", "stress", "social"]
-
-    private static let allowedTriggerRawValues: Set<String> = [
+    static let defaultActionOrder: [String] = [
         "after_waking",
         "idle_time",
         "after_meal",
@@ -29,6 +57,10 @@ enum WidgetQuickRecordStore {
         "work_transition",
         "other"
     ]
+    static let defaultActionEnabledCount: Int = 4
+
+    private static let allowedTriggerRawValuesOrdered = defaultActionOrder
+    private static let allowedTriggerRawValues: Set<String> = Set(allowedTriggerRawValuesOrdered)
 
     static func enqueue(triggerRawValue: String, createdAt: Date = Date()) {
         var queue = readQueue()
@@ -50,19 +82,38 @@ enum WidgetQuickRecordStore {
         guard let data = sharedDefaults().data(forKey: preferenceStorageKey),
               let decoded = try? JSONDecoder().decode(WidgetQuickRecordPreferences.self, from: data)
         else {
-            return WidgetQuickRecordPreferences(small: defaultSmall, medium: defaultMedium)
+            return WidgetQuickRecordPreferences(
+                small: defaultSmall,
+                medium: defaultMedium,
+                actionOrder: defaultActionOrder,
+                actionEnabledCount: defaultActionEnabledCount
+            )
         }
+
         return WidgetQuickRecordPreferences(
             small: normalized(rawValues: decoded.small, fallback: defaultSmall, maxCount: 2),
-            medium: normalized(rawValues: decoded.medium, fallback: defaultMedium, maxCount: 4)
+            medium: normalized(rawValues: decoded.medium, fallback: defaultMedium, maxCount: 4),
+            actionOrder: normalizedActionOrder(rawValues: decoded.actionOrder),
+            actionEnabledCount: normalizedEnabledCount(decoded.actionEnabledCount)
         )
     }
 
-    static func loadActionButtonChoices() -> [String] {
-        loadPreferences().medium
+    static func loadActionButtonConfig() -> ActionButtonCandidateConfig {
+        let prefs = loadPreferences()
+        return ActionButtonCandidateConfig(order: prefs.actionOrder, enabledCount: prefs.actionEnabledCount)
     }
 
-    static func savePreferences(small: [String], medium: [String]) -> Bool {
+    static func loadActionButtonChoices() -> [String] {
+        let config = loadActionButtonConfig()
+        return Array(config.order.prefix(config.enabledCount))
+    }
+
+    static func savePreferences(
+        small: [String],
+        medium: [String],
+        actionOrder: [String]? = nil,
+        actionEnabledCount: Int? = nil
+    ) -> Bool {
         let normalizedSmall = normalized(rawValues: small, fallback: defaultSmall, maxCount: 2)
         let normalizedMedium = normalized(rawValues: medium, fallback: defaultMedium, maxCount: 4)
 
@@ -72,7 +123,16 @@ enum WidgetQuickRecordStore {
             return false
         }
 
-        let payload = WidgetQuickRecordPreferences(small: normalizedSmall, medium: normalizedMedium)
+        let current = loadPreferences()
+        let normalizedOrder = normalizedActionOrder(rawValues: actionOrder ?? current.actionOrder)
+        let normalizedCount = normalizedEnabledCount(actionEnabledCount ?? current.actionEnabledCount)
+
+        let payload = WidgetQuickRecordPreferences(
+            small: normalizedSmall,
+            medium: normalizedMedium,
+            actionOrder: normalizedOrder,
+            actionEnabledCount: normalizedCount
+        )
         guard let data = try? JSONEncoder().encode(payload) else { return false }
         sharedDefaults().set(data, forKey: preferenceStorageKey)
         return true
@@ -103,5 +163,25 @@ enum WidgetQuickRecordStore {
 
         let merged = Array(valid) + fallback.filter { !valid.contains($0) }
         return Array(merged.prefix(maxCount))
+    }
+
+    private static func normalizedActionOrder(rawValues: [String]) -> [String] {
+        var seen = Set<String>()
+        var valid = rawValues.filter { raw in
+            guard allowedTriggerRawValues.contains(raw), !seen.contains(raw) else { return false }
+            seen.insert(raw)
+            return true
+        }
+
+        for raw in allowedTriggerRawValuesOrdered where !seen.contains(raw) {
+            valid.append(raw)
+            seen.insert(raw)
+        }
+
+        return Array(valid.prefix(allowedTriggerRawValuesOrdered.count))
+    }
+
+    private static func normalizedEnabledCount(_ value: Int) -> Int {
+        min(max(value, 1), allowedTriggerRawValuesOrdered.count)
     }
 }
