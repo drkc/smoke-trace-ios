@@ -70,16 +70,26 @@ struct ActionButtonQuickRecordIntent: AppIntent {
         optionsProvider: ActionButtonTriggerOptionsProvider(),
         requestValueDialog: IntentDialog("请选择这次的触发原因")
     )
-    var trigger: ActionButtonTriggerOption
+    var trigger: ActionButtonTriggerOption?
+
+    init() {
+        self.trigger = nil
+    }
 
     static var parameterSummary: some ParameterSummary {
-        Summary("记录一根：\(\.$trigger)")
+        Summary("记录一根")
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        WidgetQuickRecordStore.enqueue(triggerRawValue: trigger.rawValue)
+        let options = try await ActionButtonTriggerOptionsProvider().results()
+        let selected = try await $trigger.requestDisambiguation(
+            among: options,
+            dialog: IntentDialog("请选择这次的触发原因")
+        )
+
+        WidgetQuickRecordStore.enqueue(triggerRawValue: selected.rawValue)
         WidgetCenter.shared.reloadAllTimelines()
-        return .result(dialog: IntentDialog("已记录：\(trigger.zhLabel)"))
+        return .result(dialog: IntentDialog("已记录：\(selected.zhLabel)"))
     }
 }
 
