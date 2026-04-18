@@ -130,7 +130,9 @@ struct QuickRecordWidgetView: View {
                 ForEach(entry.mediumChoices, id: \.self) { choice in
                     Button(intent: QuickRecordActionIntent(trigger: choice)) {
                         Text(choice.zhLabel)
-                            .font(.caption)
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                             .frame(maxWidth: .infinity, minHeight: 32)
                             .background(.regularMaterial)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
