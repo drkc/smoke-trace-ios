@@ -65,35 +65,80 @@ enum TriggerTypeWidgetOption: String, AppEnum {
 
 struct QuickRecordWidgetView: View {
     let entry: QuickRecordEntry
+    @Environment(\.widgetFamily) private var family
+
+    private let quickChoices: [TriggerTypeWidgetOption] = [
+        .idleTime, .afterMeal, .stress, .social
+    ]
 
     var body: some View {
-        ZStack {
-            Button(intent: QuickRecordWidgetIntent(trigger: entry.trigger)) {
-                VStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.orange)
-
-                    Text("快速记录")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-
-                    Text("触发：\(entry.trigger.zhLabel)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if entry.pendingCount > 0 {
-                        Text("待入库：\(entry.pendingCount)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            if family == .systemMedium {
+                mediumContent
+            } else {
+                smallContent
             }
-            .buttonStyle(.plain)
         }
         .padding()
         .containerBackground(.fill.secondary.opacity(0.12), for: .widget)
+    }
+
+    private var smallContent: some View {
+        Button(intent: QuickRecordWidgetIntent(trigger: entry.trigger)) {
+            VStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(.orange)
+
+                Text("快速记录")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Text("触发：\(entry.trigger.zhLabel)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if entry.pendingCount > 0 {
+                    Text("待入库：\(entry.pendingCount)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var mediumContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("快速记录")
+                .font(.headline)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(quickChoices, id: \.self) { choice in
+                    Button(intent: QuickRecordWidgetIntent(trigger: choice)) {
+                        Text(choice.zhLabel)
+                            .font(.caption)
+                            .frame(maxWidth: .infinity, minHeight: 32)
+                            .background(.regularMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            HStack {
+                Text("默认触发：\(entry.trigger.zhLabel)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if entry.pendingCount > 0 {
+                    Text("待入库：\(entry.pendingCount)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 }
 
