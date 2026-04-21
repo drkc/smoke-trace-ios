@@ -24,7 +24,11 @@ struct QuickRecordActionIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        WidgetQuickRecordStore.enqueue(triggerRawValue: trigger.rawValue)
+        let eventTime = Date()
+        let wrote = QuickRecordPersistence.writeDirect(triggerRawValue: trigger.rawValue, createdAt: eventTime)
+        if !wrote {
+            WidgetQuickRecordStore.enqueue(triggerRawValue: trigger.rawValue, createdAt: eventTime)
+        }
         WidgetCenter.shared.reloadTimelines(ofKind: quickRecordWidgetKind)
         return .result()
     }

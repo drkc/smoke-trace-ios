@@ -10,19 +10,26 @@ struct RootView: View {
     @State private var showActionButtonLaunchPicker = false
     @State private var launchPickerChoices: [TriggerPrimary] = []
     @State private var launchPickerPosition: ActionButtonPickerPosition = .center
+    @State private var dataRefreshSignal = UUID()
 
     var body: some View {
         let setting = effectiveSetting
 
         ZStack {
             TabView {
-                HomeView(viewModel: HomeViewModel(context: modelContext, setting: setting))
+                HomeView(
+                    viewModel: HomeViewModel(context: modelContext, setting: setting),
+                    refreshSignal: dataRefreshSignal
+                )
                     .id(homeViewIdentity)
                     .tabItem {
                         Label("记录", systemImage: "plus.circle")
                     }
 
-                HistoryView(viewModel: HistoryViewModel(context: modelContext))
+                HistoryView(
+                    viewModel: HistoryViewModel(context: modelContext),
+                    refreshSignal: dataRefreshSignal
+                )
                     .tabItem {
                         Label("历史", systemImage: "chart.bar")
                     }
@@ -61,7 +68,7 @@ struct RootView: View {
         .onAppear {
             _ = AppSetting.fetchOrCreate(in: modelContext)
             refreshLockStateForCurrentSetting()
-            WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
+            processPendingRequestsAndRefreshUI()
             presentLaunchPickerIfNeeded()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -72,7 +79,7 @@ struct RootView: View {
                 }
             case .active:
                 refreshLockStateForCurrentSetting()
-                WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
+                processPendingRequestsAndRefreshUI()
                 presentLaunchPickerIfNeeded()
             @unknown default:
                 break
@@ -117,7 +124,14 @@ struct RootView: View {
 
     private func handleLaunchPickerSelection(_ trigger: TriggerPrimary) {
         WidgetQuickRecordStore.enqueue(triggerRawValue: trigger.rawValue)
-        WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
+        processPendingRequestsAndRefreshUI()
         showActionButtonLaunchPicker = false
+    }
+
+    private func processPendingRequestsAndRefreshUI() {
+        let inserted = WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
+        if inserted > 0 {
+            dataRefreshSignal = UUID()
+        }
     }
 }

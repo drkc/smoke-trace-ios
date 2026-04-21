@@ -87,9 +87,17 @@ struct ActionButtonQuickRecordIntent: AppIntent {
             dialog: IntentDialog("请选择这次的触发原因")
         )
 
-        WidgetQuickRecordStore.enqueue(triggerRawValue: selected.rawValue)
+        let eventTime = Date()
+        let wrote = QuickRecordPersistence.writeDirect(triggerRawValue: selected.rawValue, createdAt: eventTime)
+        if !wrote {
+            WidgetQuickRecordStore.enqueue(triggerRawValue: selected.rawValue, createdAt: eventTime)
+        }
+
         WidgetCenter.shared.reloadAllTimelines()
-        return .result(dialog: IntentDialog("已记录：\(selected.zhLabel)"))
+        if wrote {
+            return .result(dialog: IntentDialog("已记录：\(selected.zhLabel)"))
+        }
+        return .result(dialog: IntentDialog("已加入待入库队列：\(selected.zhLabel)"))
     }
 }
 

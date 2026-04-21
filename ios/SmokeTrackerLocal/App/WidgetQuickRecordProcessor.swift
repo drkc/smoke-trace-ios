@@ -3,9 +3,10 @@ import SwiftData
 import WidgetKit
 
 enum WidgetQuickRecordProcessor {
-    static func processPendingRequests(in context: ModelContext) {
+    @discardableResult
+    static func processPendingRequests(in context: ModelContext) -> Int {
         let requests = WidgetQuickRecordStore.readAllRequests()
-        guard !requests.isEmpty else { return }
+        guard !requests.isEmpty else { return 0 }
 
         let setting = AppSetting.fetchOrCreate(in: context)
         let timeZone = TimeZone(identifier: setting.timezoneIdentifier) ?? .current
@@ -14,6 +15,7 @@ enum WidgetQuickRecordProcessor {
         var logs = (try? context.fetch(FetchDescriptor<SmokeLog>())) ?? []
         var existingIDs = Set(logs.map(\.id))
         var processedIDs = Set<String>()
+        var insertedCount = 0
 
         for request in requests {
             if existingIDs.contains(request.id) {
@@ -40,6 +42,7 @@ enum WidgetQuickRecordProcessor {
                 logs.append(log)
                 existingIDs.insert(log.id)
                 processedIDs.insert(request.id)
+                insertedCount += 1
             } catch {
                 continue
             }
@@ -47,5 +50,6 @@ enum WidgetQuickRecordProcessor {
 
         WidgetQuickRecordStore.removeRequests(ids: processedIDs)
         WidgetCenter.shared.reloadAllTimelines()
+        return insertedCount
     }
 }

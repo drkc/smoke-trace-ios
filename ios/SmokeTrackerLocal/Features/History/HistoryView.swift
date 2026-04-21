@@ -3,6 +3,7 @@ import Charts
 
 struct HistoryView: View {
     @StateObject var viewModel: HistoryViewModel
+    let refreshSignal: UUID
     @State private var selectedTrendDate: Date?
     @State private var selectedRollingDate: Date?
     @State private var editingDraft: EditableHistoryLog?
@@ -71,6 +72,10 @@ struct HistoryView: View {
                 Text(operationErrorMessage ?? "未知错误")
             }
             .onAppear {
+                viewModel.reload()
+                syncSelectionToLatest()
+            }
+            .onChange(of: refreshSignal) { _, _ in
                 viewModel.reload()
                 syncSelectionToLatest()
             }

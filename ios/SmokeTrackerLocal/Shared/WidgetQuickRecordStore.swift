@@ -84,7 +84,7 @@ struct ActionButtonCandidateConfig {
 }
 
 enum WidgetQuickRecordStore {
-    private static let suiteName = "group.LRS7YLA5GN.eY3UkMP"
+    private static let suiteName = SharedModelContainerFactory.appGroupIdentifier
     private static let queueStorageKey = "widget.quick_record.queue"
     private static let preferenceStorageKey = "widget.quick_record.preferences"
     private static let launchPickerRequestKey = "action_button.launch_picker.request"

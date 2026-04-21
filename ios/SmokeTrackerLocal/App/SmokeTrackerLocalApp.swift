@@ -3,19 +3,7 @@ import SwiftData
 
 @main
 struct SmokeTrackerLocalApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            SmokeLog.self,
-            AppSetting.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    var sharedModelContainer: ModelContainer = SharedModelContainerFactory.shared
 
     var body: some Scene {
         WindowGroup {

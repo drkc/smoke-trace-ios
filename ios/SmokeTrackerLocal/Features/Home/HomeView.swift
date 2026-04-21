@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @StateObject var viewModel: HomeViewModel
+    let refreshSignal: UUID
     @State private var showBackfill = false
     private let summaryRefreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -52,6 +53,9 @@ struct HomeView: View {
                 viewModel.refreshSummary()
             }
             .onReceive(summaryRefreshTimer) { _ in
+                viewModel.refreshSummary()
+            }
+            .onChange(of: refreshSignal) { _, _ in
                 viewModel.refreshSummary()
             }
         }
