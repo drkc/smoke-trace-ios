@@ -201,16 +201,23 @@ struct QuickRecordProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: QuickRecordWidgetIntent, in context: Context) async -> Timeline<QuickRecordEntry> {
-        let entry = buildEntry()
-        return Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(300)))
+        let now = Date()
+        let entry = buildEntry(now: now)
+        let nextRefresh: Date
+        if entry.latestActionFeedback != nil {
+            nextRefresh = now.addingTimeInterval(10)
+        } else {
+            nextRefresh = now.addingTimeInterval(300)
+        }
+        return Timeline(entries: [entry], policy: .after(nextRefresh))
     }
 
-    private func buildEntry() -> QuickRecordEntry {
+    private func buildEntry(now: Date = .now) -> QuickRecordEntry {
         let prefs = WidgetQuickRecordStore.loadPreferences()
         return QuickRecordEntry(
-            date: .now,
+            date: now,
             pendingCount: WidgetQuickRecordStore.pendingCount(),
-            latestActionFeedback: WidgetQuickRecordStore.loadLatestActionFeedback(),
+            latestActionFeedback: WidgetQuickRecordStore.loadLatestActionFeedback(now: now),
             smallChoices: prefs.small.map { TriggerTypeWidgetOption.from(rawValue: $0) },
             mediumChoices: prefs.medium.map { TriggerTypeWidgetOption.from(rawValue: $0) }
         )

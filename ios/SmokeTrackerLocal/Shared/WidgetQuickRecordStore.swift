@@ -95,6 +95,7 @@ enum WidgetQuickRecordStore {
     private static let preferenceStorageKey = "widget.quick_record.preferences"
     private static let launchPickerRequestKey = "action_button.launch_picker.request"
     private static let latestActionFeedbackStorageKey = "widget.quick_record.latest_action_feedback"
+    private static let feedbackDisplayDuration: TimeInterval = 8
 
     static let defaultSmall: [String] = ["idle_time", "after_meal"]
     static let defaultMedium: [String] = ["idle_time", "after_meal", "stress", "social"]
@@ -153,9 +154,19 @@ enum WidgetQuickRecordStore {
         sharedDefaults().set(data, forKey: latestActionFeedbackStorageKey)
     }
 
-    static func loadLatestActionFeedback() -> WidgetQuickRecordActionFeedback? {
-        guard let data = sharedDefaults().data(forKey: latestActionFeedbackStorageKey) else { return nil }
-        return try? JSONDecoder().decode(WidgetQuickRecordActionFeedback.self, from: data)
+    static func loadLatestActionFeedback(now: Date = Date()) -> WidgetQuickRecordActionFeedback? {
+        guard let data = sharedDefaults().data(forKey: latestActionFeedbackStorageKey),
+              let feedback = try? JSONDecoder().decode(WidgetQuickRecordActionFeedback.self, from: data)
+        else {
+            return nil
+        }
+
+        if now.timeIntervalSince(feedback.createdAt) > feedbackDisplayDuration {
+            sharedDefaults().removeObject(forKey: latestActionFeedbackStorageKey)
+            return nil
+        }
+
+        return feedback
     }
 
     static func loadPreferences() -> WidgetQuickRecordPreferences {
