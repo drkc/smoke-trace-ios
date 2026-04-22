@@ -29,6 +29,11 @@ struct QuickRecordActionIntent: AppIntent {
         if !wrote {
             WidgetQuickRecordStore.enqueue(triggerRawValue: trigger.rawValue, createdAt: eventTime)
         }
+        WidgetQuickRecordStore.saveLatestActionFeedback(
+            triggerRawValue: trigger.rawValue,
+            createdAt: eventTime,
+            isDirectWrite: wrote
+        )
         WidgetCenter.shared.reloadTimelines(ofKind: quickRecordWidgetKind)
         return .result()
     }
@@ -103,6 +108,7 @@ struct QuickRecordWidgetView: View {
                             Text(choice.zhLabel)
                                 .font(.headline)
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.55)
                             Spacer()
                             Image(systemName: "plus.circle.fill")
                                 .font(.system(size: 18, weight: .semibold))
@@ -115,6 +121,14 @@ struct QuickRecordWidgetView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+
+            if let latest = entry.latestActionFeedback {
+                Text(latest.message)
+                    .font(.caption2)
+                    .foregroundStyle(latest.isDirectWrite ? .green : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
 
             if entry.pendingCount > 0 {
@@ -135,14 +149,23 @@ struct QuickRecordWidgetView: View {
                     Button(intent: QuickRecordActionIntent(trigger: choice)) {
                         Text(choice.zhLabel)
                             .font(.caption2)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                            .frame(maxWidth: .infinity, minHeight: 32)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.5)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 36)
                             .background(.regularMaterial)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                     .buttonStyle(.plain)
                 }
+            }
+
+            if let latest = entry.latestActionFeedback {
+                Text(latest.message)
+                    .font(.caption2)
+                    .foregroundStyle(latest.isDirectWrite ? .green : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
 
             if entry.pendingCount > 0 {
@@ -157,6 +180,7 @@ struct QuickRecordWidgetView: View {
 struct QuickRecordEntry: TimelineEntry {
     let date: Date
     let pendingCount: Int
+    let latestActionFeedback: WidgetQuickRecordActionFeedback?
     let smallChoices: [TriggerTypeWidgetOption]
     let mediumChoices: [TriggerTypeWidgetOption]
 }
@@ -166,6 +190,7 @@ struct QuickRecordProvider: AppIntentTimelineProvider {
         QuickRecordEntry(
             date: .now,
             pendingCount: 0,
+            latestActionFeedback: nil,
             smallChoices: WidgetQuickRecordStore.defaultSmall.map { TriggerTypeWidgetOption.from(rawValue: $0) },
             mediumChoices: WidgetQuickRecordStore.defaultMedium.map { TriggerTypeWidgetOption.from(rawValue: $0) }
         )
@@ -185,6 +210,7 @@ struct QuickRecordProvider: AppIntentTimelineProvider {
         return QuickRecordEntry(
             date: .now,
             pendingCount: WidgetQuickRecordStore.pendingCount(),
+            latestActionFeedback: WidgetQuickRecordStore.loadLatestActionFeedback(),
             smallChoices: prefs.small.map { TriggerTypeWidgetOption.from(rawValue: $0) },
             mediumChoices: prefs.medium.map { TriggerTypeWidgetOption.from(rawValue: $0) }
         )
