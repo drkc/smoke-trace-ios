@@ -17,8 +17,11 @@ struct DataManagementSettingsView: View {
             }
 
             Section("导出") {
-                Button("导出 JSON 到 Documents") {
-                    exportJSON()
+                Button("导出 JSON（兼容格式）到 Documents") {
+                    exportJSONCompatible()
+                }
+                Button("导出 JSON（AI 分析 v2）到 Documents") {
+                    exportJSONForAI()
                 }
                 Button("导出 CSV 到 Documents") {
                     exportCSV()
@@ -57,7 +60,7 @@ struct DataManagementSettingsView: View {
         }
     }
 
-    private func exportJSON() {
+    private func exportJSONCompatible() {
         do {
             let logs = try modelContext.fetch(FetchDescriptor<SmokeLog>()).sorted(by: { $0.createdAt < $1.createdAt })
             let payload = logs.map {
@@ -74,9 +77,80 @@ struct DataManagementSettingsView: View {
             }
 
             let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
-            let url = documentsURL().appendingPathComponent("smoke-local-export.json")
+            let url = documentsURL().appendingPathComponent("smoke-local-export.compat.json")
             try data.write(to: url)
-            exportMessage = "JSON 已导出：\(url.lastPathComponent)"
+            exportMessage = "兼容 JSON 已导出：\(url.lastPathComponent)"
+        } catch {
+            exportMessage = "导出失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func exportJSONForAI() {
+        do {
+            let logs = try modelContext.fetch(FetchDescriptor<SmokeLog>()).sorted(by: { $0.createdAt < $1.createdAt })
+            let cravings = try modelContext.fetch(FetchDescriptor<CravingEvent>()).sorted(by: { $0.createdAt < $1.createdAt })
+            let setting = AppSetting.fetchOrCreate(in: modelContext)
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+            let payload: [String: Any] = [
+                "schema_version": "2.0",
+                "exported_at": iso.string(from: Date()),
+                "timezone": setting.timezoneIdentifier,
+                "source": "SmokeTrackerLocal iOS",
+                "logs": logs.map { log in
+                    var row: [String: Any] = [
+                        "id": log.id,
+                        "created_at": iso.string(from: log.createdAt),
+                        "trigger_primary": log.triggerPrimary.rawValue,
+                        "delayed_10min": log.delayed10min,
+                        "count_in_day": log.countInDay,
+                        "is_backfill": log.isBackfill
+                    ]
+                    if let triggerSecondary = log.triggerSecondary, !triggerSecondary.isEmpty {
+                        row["trigger_secondary"] = triggerSecondary
+                    }
+                    if let minutesSinceLast = log.minutesSinceLast {
+                        row["minutes_since_last"] = minutesSinceLast
+                    }
+                    if let insightType = log.insightTypeRaw {
+                        row["insight_type"] = insightType
+                    }
+                    if let insightPrimaryTrigger = log.insightPrimaryTriggerRaw {
+                        row["insight_primary_trigger"] = insightPrimaryTrigger
+                    }
+                    if let insightAction = log.insightAction {
+                        row["insight_action"] = insightAction
+                    }
+                    if let insightError = log.insightError {
+                        row["insight_error"] = insightError
+                    }
+                    return row
+                },
+                "cravings": cravings.map { event in
+                    var row: [String: Any] = [
+                        "id": event.id,
+                        "created_at": iso.string(from: event.createdAt),
+                        "trigger_primary": event.triggerPrimary.rawValue,
+                        "status": event.status.rawValue
+                    ]
+                    if let triggerSecondary = event.triggerSecondary, !triggerSecondary.isEmpty {
+                        row["trigger_secondary"] = triggerSecondary
+                    }
+                    if let resolvedAt = event.resolvedAt {
+                        row["resolved_at"] = iso.string(from: resolvedAt)
+                    }
+                    if let linkedSmokeLogID = event.linkedSmokeLogID {
+                        row["linked_smoke_log_id"] = linkedSmokeLogID
+                    }
+                    return row
+                }
+            ]
+
+            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
+            let url = documentsURL().appendingPathComponent("smoke-local-export.ai-v2.json")
+            try data.write(to: url)
+            exportMessage = "AI JSON v2 已导出：\(url.lastPathComponent)"
         } catch {
             exportMessage = "导出失败：\(error.localizedDescription)"
         }
