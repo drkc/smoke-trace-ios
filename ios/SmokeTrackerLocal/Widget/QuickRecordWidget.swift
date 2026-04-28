@@ -247,6 +247,7 @@ struct SmokingDashboardEntry: TimelineEntry {
     let sinceLastText: String
     let smokedCount: Int
     let goalUpperLimit: Int
+    let pendingDelayText: String?
 }
 
 struct SmokingDashboardProvider: TimelineProvider {
@@ -257,7 +258,8 @@ struct SmokingDashboardProvider: TimelineProvider {
             dayNumber: 1,
             sinceLastText: "1h20m",
             smokedCount: 3,
-            goalUpperLimit: 14
+            goalUpperLimit: 14,
+            pendingDelayText: nil
         )
     }
 
@@ -294,13 +296,26 @@ struct SmokingDashboardProvider: TimelineProvider {
         let goal = CessationGoalResolver(timeZone: timeZone).resolveGoal(for: now, planStartDate: startDate)
         let dayNumber = max(1, (calendar.dateComponents([.day], from: calendar.startOfDay(for: startDate), to: calendar.startOfDay(for: now)).day ?? 0) + 1)
 
+        let flow = CravingFlowService(logWriter: LogWriteService(timeZone: timeZone))
+        let pending = flow.latestPending(in: context)
+        let pendingDelayText: String? = {
+            guard let pending else { return nil }
+            let minutes = max(0, Int(now.timeIntervalSince(pending.createdAt) / 60))
+            if minutes < 60 { return "\(minutes)m" }
+            let h = minutes / 60
+            let m = minutes % 60
+            if m == 0 { return "\(h)h" }
+            return "\(h)h\(m)m"
+        }()
+
         return SmokingDashboardEntry(
             date: now,
             weekNumber: goal.weekNumber,
             dayNumber: dayNumber,
             sinceLastText: sinceText,
             smokedCount: todayCount,
-            goalUpperLimit: goal.maxSmokedCount
+            goalUpperLimit: goal.maxSmokedCount,
+            pendingDelayText: pendingDelayText
         )
     }
 
@@ -397,9 +412,17 @@ struct SmokingMiniDashboardWidgetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            miniMetricRow(icon: "clock.fill", value: entry.sinceLastText)
-            miniMetricRow(icon: "flame.fill", value: "\(entry.smokedCount)")
-            miniMetricRow(icon: "scope", value: entry.goalUpperLimit == 0 ? "0" : "\(entry.goalUpperLimit)")
+            if let pendingDelay = entry.pendingDelayText {
+                miniMetricRow(icon: "hourglass", value: pendingDelay)
+                HStack(spacing: 8) {
+                    miniMetricCompact(icon: "flame.fill", value: "\(entry.smokedCount)")
+                    miniMetricCompact(icon: "scope", value: entry.goalUpperLimit == 0 ? "0" : "\(entry.goalUpperLimit)")
+                }
+            } else {
+                miniMetricRow(icon: "clock.fill", value: entry.sinceLastText)
+                miniMetricRow(icon: "flame.fill", value: "\(entry.smokedCount)")
+                miniMetricRow(icon: "scope", value: entry.goalUpperLimit == 0 ? "0" : "\(entry.goalUpperLimit)")
+            }
 
             HStack {
                 Text("W\(entry.weekNumber) · D\(entry.dayNumber)")
@@ -434,6 +457,25 @@ struct SmokingMiniDashboardWidgetView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func miniMetricCompact(icon: String, value: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)

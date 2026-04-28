@@ -171,6 +171,35 @@ final class HomeViewModel: ObservableObject {
         }
     }
 
+    func cancelPendingCraving() {
+        do {
+            guard let event = try cravingFlow.cancelNearestPending(in: context) else {
+                feedback = HomeFeedback(
+                    title: "暂无待取消",
+                    detail: "当前没有预备状态",
+                    tip: nil,
+                    latestLogID: nil
+                )
+                return
+            }
+
+            feedback = HomeFeedback(
+                title: "已取消",
+                detail: "\(event.triggerPrimary.zhLabel) 本次已记为扛过",
+                tip: "不错，继续保持",
+                latestLogID: nil
+            )
+            refreshSummary()
+        } catch {
+            feedback = HomeFeedback(
+                title: "取消失败",
+                detail: error.localizedDescription,
+                tip: nil,
+                latestLogID: nil
+            )
+        }
+    }
+
     private func calcVsYesterdaySoFar(logs: [SmokeLog], at current: Date) -> PaceCompare {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = logWriter.timeZone

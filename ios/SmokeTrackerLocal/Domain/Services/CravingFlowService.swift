@@ -69,6 +69,21 @@ struct CravingFlowService {
             .max(by: { $0.createdAt < $1.createdAt })
     }
 
+    func cancelNearestPending(in context: ModelContext, at cancelledAt: Date = Date()) throws -> CravingEvent? {
+        let allEvents = try context.fetch(FetchDescriptor<CravingEvent>())
+        guard let pending = allEvents
+            .filter({ $0.status == .pending })
+            .max(by: { $0.createdAt < $1.createdAt })
+        else {
+            return nil
+        }
+
+        pending.status = .resisted
+        pending.resolvedAt = cancelledAt
+        try context.save()
+        return pending
+    }
+
     private func normalizedSecondary(_ text: String?) -> String? {
         guard let raw = text?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return nil

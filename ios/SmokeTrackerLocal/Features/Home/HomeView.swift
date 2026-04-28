@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @StateObject var viewModel: HomeViewModel
     let refreshSignal: UUID
+    @State private var showPendingActionDialog = false
     private let summaryRefreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -41,8 +42,8 @@ struct HomeView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
 
-                        Button("确认抽了") {
-                            viewModel.confirmSmokedNow()
+                        Button("确认/取消") {
+                            showPendingActionDialog = true
                         }
                         .buttonStyle(.borderedProminent)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -56,6 +57,15 @@ struct HomeView: View {
                 .padding()
             }
             .navigationTitle("记录")
+            .confirmationDialog("处理这次预备状态", isPresented: $showPendingActionDialog) {
+                Button("确认抽了", role: .none) {
+                    viewModel.confirmSmokedNow()
+                }
+                Button("取消这次", role: .destructive) {
+                    viewModel.cancelPendingCraving()
+                }
+                Button("返回", role: .cancel) {}
+            }
             .onAppear {
                 viewModel.refreshSummary()
             }

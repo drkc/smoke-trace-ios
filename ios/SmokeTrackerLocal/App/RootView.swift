@@ -81,6 +81,7 @@ struct RootView: View {
             case .active:
                 refreshLockStateForCurrentSetting()
                 processPendingRequestsAndRefreshUI()
+                dataRefreshSignal = UUID()
                 presentLaunchPickerIfNeeded()
             @unknown default:
                 break
