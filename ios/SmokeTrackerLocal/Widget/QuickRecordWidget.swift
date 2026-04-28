@@ -396,12 +396,10 @@ struct SmokingMiniDashboardWidgetView: View {
     let entry: SmokingDashboardEntry
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                miniMetric(icon: "clock.fill", value: entry.sinceLastText)
-                miniMetric(icon: "flame.fill", value: "\(entry.smokedCount)")
-                miniMetric(icon: "scope", value: entry.goalUpperLimit == 0 ? "0" : "\(entry.goalUpperLimit)")
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            miniMetricRow(icon: "clock.fill", value: entry.sinceLastText)
+            miniMetricRow(icon: "flame.fill", value: "\(entry.smokedCount)")
+            miniMetricRow(icon: "scope", value: entry.goalUpperLimit == 0 ? "0" : "\(entry.goalUpperLimit)")
 
             HStack {
                 Text("W\(entry.weekNumber) · D\(entry.dayNumber)")
@@ -409,6 +407,7 @@ struct SmokingMiniDashboardWidgetView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
             }
+            .padding(.top, 2)
         }
         .padding(12)
         .containerBackground(
@@ -422,18 +421,23 @@ struct SmokingMiniDashboardWidgetView: View {
     }
 
     @ViewBuilder
-    private func miniMetric(icon: String, value: String) -> some View {
-        VStack(spacing: 4) {
+    private func miniMetricRow(icon: String, value: String) -> some View {
+        HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .frame(width: 14)
+
             Text(value)
                 .font(.system(size: 16, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 52)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
