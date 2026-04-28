@@ -282,7 +282,13 @@ struct SmokingDashboardProvider: TimelineProvider {
         let logs = (try? context.fetch(FetchDescriptor<SmokeLog>())) ?? []
         let todayCount = StatsService.countInDay(for: now, logs: logs, timeZone: timeZone)
         let latest = logs.max(by: { $0.createdAt < $1.createdAt })
-        let sinceText = formatDuration(StatsService.minutesFromNow(to: latest?.createdAt, now: now))
+        let sinceMinutes: Int? = {
+            guard let last = latest?.createdAt else { return nil }
+            let interval = now.timeIntervalSince(last)
+            guard interval >= 0 else { return nil }
+            return Int(interval / 60)
+        }()
+        let sinceText = formatDuration(sinceMinutes)
 
         let startDate = setting.cessationPlanStartDate ?? now
         let goal = CessationGoalResolver(timeZone: timeZone).resolveGoal(for: now, planStartDate: startDate)
