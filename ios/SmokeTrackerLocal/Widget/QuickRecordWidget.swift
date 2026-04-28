@@ -416,9 +416,10 @@ struct SmokingMiniDashboardWidgetView: View {
         VStack(alignment: .leading, spacing: 8) {
             if let pendingDelay = entry.pendingDelayText {
                 miniMetricRow(icon: "hourglass", value: pendingDelay)
+                miniMetricRow(icon: "clock.fill", value: entry.sinceLastText)
                 HStack(spacing: 8) {
-                    miniMetricCompact(icon: "flame.fill", value: "\(entry.smokedCount)")
-                    miniMetricCompact(icon: "scope", value: entry.goalUpperLimit == 0 ? "0" : "\(entry.goalUpperLimit)")
+                    miniMetricCompact(icon: "flame.fill", label: "抽", value: "\(entry.smokedCount)")
+                    miniMetricCompact(icon: "scope", label: "限", value: entry.goalUpperLimit == 0 ? "0" : "\(entry.goalUpperLimit)")
                 }
             } else {
                 miniMetricRow(icon: "clock.fill", value: entry.sinceLastText)
@@ -468,9 +469,12 @@ struct SmokingMiniDashboardWidgetView: View {
     }
 
     @ViewBuilder
-    private func miniMetricCompact(icon: String, value: String) -> some View {
-        HStack(spacing: 6) {
+    private func miniMetricCompact(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: 4) {
             Image(systemName: icon)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(value)
