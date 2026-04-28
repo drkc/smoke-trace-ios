@@ -53,6 +53,7 @@ targets:
       - path: Domain/Services/StatsService.swift
       - path: Domain/Services/LogWriteService.swift
       - path: Domain/Services/CessationDailyMetricsService.swift
+      - path: Domain/Services/CravingFlowService.swift
     settings:
       base:
         PRODUCT_NAME: SmokeTrackerWidget

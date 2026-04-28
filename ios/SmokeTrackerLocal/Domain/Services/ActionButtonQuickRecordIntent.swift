@@ -1,6 +1,7 @@
 import Foundation
 import AppIntents
 import WidgetKit
+import SwiftData
 
 enum ActionButtonTriggerOption: String, AppEnum, CaseIterable {
     case afterWaking = "after_waking"
@@ -61,8 +62,8 @@ struct ActionButtonTriggerOptionsProvider: DynamicOptionsProvider {
 }
 
 struct ActionButtonQuickRecordIntent: AppIntent {
-    static var title: LocalizedStringResource = "快速记录（系统弹层）"
-    static var description = IntentDescription("不拉起 App，使用系统选择弹层进行快速记录")
+    static var title: LocalizedStringResource = "智能单键记录"
+    static var description = IntentDescription("单键双阶段：无待确认=记录准备；有待确认=确认抽了")
     static var openAppWhenRun = false
 
     @Parameter(
@@ -77,27 +78,33 @@ struct ActionButtonQuickRecordIntent: AppIntent {
     }
 
     static var parameterSummary: some ParameterSummary {
-        Summary("记录一根")
+        Summary("智能单键记录")
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        let context = ModelContext(SharedModelContainerFactory.shared)
+        let setting = AppSetting.fetchOrCreate(in: context)
+        let timeZone = TimeZone(identifier: setting.timezoneIdentifier) ?? .current
+        let flow = CravingFlowService(logWriter: LogWriteService(timeZone: timeZone))
+
+        if flow.latestPending(in: context) != nil {
+            if let result = try flow.confirmSmokedNearestPending(in: context, at: Date()) {
+                WidgetCenter.shared.reloadAllTimelines()
+                let minutes = max(0, Int((result.event.resolvedAt ?? Date()).timeIntervalSince(result.event.createdAt) / 60))
+                return .result(dialog: IntentDialog("已确认抽了（拖延 \(minutes) 分钟）"))
+            }
+            return .result(dialog: IntentDialog("确认失败，请重试"))
+        }
+
         let options = try await ActionButtonTriggerOptionsProvider().results()
         let selected = try await $trigger.requestDisambiguation(
             among: options,
             dialog: IntentDialog("请选择这次的触发原因")
         )
 
-        let eventTime = Date()
-        let wrote = QuickRecordPersistence.writeDirect(triggerRawValue: selected.rawValue, createdAt: eventTime)
-        if !wrote {
-            WidgetQuickRecordStore.enqueue(triggerRawValue: selected.rawValue, createdAt: eventTime)
-        }
-
+        _ = try flow.createPendingCraving(in: context, trigger: TriggerPrimary(rawValue: selected.rawValue) ?? .idleTime, at: Date())
         WidgetCenter.shared.reloadAllTimelines()
-        if wrote {
-            return .result(dialog: IntentDialog("已记录：\(selected.zhLabel)"))
-        }
-        return .result(dialog: IntentDialog("已加入待入库队列：\(selected.zhLabel)"))
+        return .result(dialog: IntentDialog("已记录准备：\(selected.zhLabel)"))
     }
 }
 

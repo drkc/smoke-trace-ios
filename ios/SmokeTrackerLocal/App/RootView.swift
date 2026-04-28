@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
@@ -123,8 +124,12 @@ struct RootView: View {
     }
 
     private func handleLaunchPickerSelection(_ trigger: TriggerPrimary) {
-        WidgetQuickRecordStore.enqueue(triggerRawValue: trigger.rawValue)
-        processPendingRequestsAndRefreshUI()
+        let setting = AppSetting.fetchOrCreate(in: modelContext)
+        let timeZone = TimeZone(identifier: setting.timezoneIdentifier) ?? .current
+        let flow = CravingFlowService(logWriter: LogWriteService(timeZone: timeZone))
+        _ = try? flow.createPendingCraving(in: modelContext, trigger: trigger, at: Date())
+        WidgetCenter.shared.reloadAllTimelines()
+        dataRefreshSignal = UUID()
         showActionButtonLaunchPicker = false
     }
 
