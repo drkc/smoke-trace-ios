@@ -11,7 +11,7 @@ struct QuickRecordWidgetIntent: WidgetConfigurationIntent {
 }
 
 struct QuickRecordActionIntent: AppIntent {
-    static var title: LocalizedStringResource = "快速记录"
+    static var title: LocalizedStringResource = "准备记录"
 
     @Parameter(title: "触发类型")
     var trigger: TriggerTypeWidgetOption
@@ -25,17 +25,60 @@ struct QuickRecordActionIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        let eventTime = Date()
-        let wrote = QuickRecordPersistence.writeDirect(triggerRawValue: trigger.rawValue, createdAt: eventTime)
-        if !wrote {
-            WidgetQuickRecordStore.enqueue(triggerRawValue: trigger.rawValue, createdAt: eventTime)
-        }
-        WidgetQuickRecordStore.saveLatestActionFeedback(
-            triggerRawValue: trigger.rawValue,
-            createdAt: eventTime,
-            isDirectWrite: wrote
+        let now = Date()
+        let context = ModelContext(SharedModelContainerFactory.shared)
+        let setting = AppSetting.fetchOrCreate(in: context)
+        let timeZone = TimeZone(identifier: setting.timezoneIdentifier) ?? .current
+        let flow = CravingFlowService(logWriter: LogWriteService(timeZone: timeZone))
+
+        _ = try flow.createPendingCraving(
+            in: context,
+            trigger: TriggerPrimary(rawValue: trigger.rawValue) ?? .idleTime,
+            at: now
         )
-        WidgetCenter.shared.reloadTimelines(ofKind: quickRecordWidgetKind)
+        WidgetQuickRecordStore.saveLatestActionFeedback(message: "已进入预备", createdAt: now, isDirectWrite: true)
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
+    }
+}
+
+struct QuickRecordConfirmIntent: AppIntent {
+    static var title: LocalizedStringResource = "确认抽了"
+
+    func perform() async throws -> some IntentResult {
+        let now = Date()
+        let context = ModelContext(SharedModelContainerFactory.shared)
+        let setting = AppSetting.fetchOrCreate(in: context)
+        let timeZone = TimeZone(identifier: setting.timezoneIdentifier) ?? .current
+        let flow = CravingFlowService(logWriter: LogWriteService(timeZone: timeZone))
+
+        if let result = try flow.confirmSmokedNearestPending(in: context, at: now) {
+            let minutes = max(0, Int((result.event.resolvedAt ?? now).timeIntervalSince(result.event.createdAt) / 60))
+            WidgetQuickRecordStore.saveLatestActionFeedback(message: "已确认（\(minutes)m）", createdAt: now, isDirectWrite: true)
+        } else {
+            WidgetQuickRecordStore.saveLatestActionFeedback(message: "无待确认", createdAt: now, isDirectWrite: false)
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+        return .result()
+    }
+}
+
+struct QuickRecordCancelIntent: AppIntent {
+    static var title: LocalizedStringResource = "取消这次"
+
+    func perform() async throws -> some IntentResult {
+        let now = Date()
+        let context = ModelContext(SharedModelContainerFactory.shared)
+        let setting = AppSetting.fetchOrCreate(in: context)
+        let timeZone = TimeZone(identifier: setting.timezoneIdentifier) ?? .current
+        let flow = CravingFlowService(logWriter: LogWriteService(timeZone: timeZone))
+
+        if (try flow.cancelNearestPending(in: context, at: now)) != nil {
+            WidgetQuickRecordStore.saveLatestActionFeedback(message: "已取消", createdAt: now, isDirectWrite: true)
+        } else {
+            WidgetQuickRecordStore.saveLatestActionFeedback(message: "无待确认", createdAt: now, isDirectWrite: false)
+        }
+        WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
 }
@@ -103,15 +146,13 @@ struct QuickRecordWidgetView: View {
                 .font(.headline)
 
             VStack(spacing: 8) {
-                ForEach(entry.smallChoices, id: \.self) { choice in
-                    Button(intent: QuickRecordActionIntent(trigger: choice)) {
+                if entry.hasPendingCraving {
+                    Button(intent: QuickRecordConfirmIntent()) {
                         HStack {
-                            Text(choice.zhLabel)
+                            Text("确认")
                                 .font(.headline)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.55)
                             Spacer()
-                            Image(systemName: "plus.circle.fill")
+                            Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 18, weight: .semibold))
                         }
                         .padding(.horizontal, 10)
@@ -121,6 +162,42 @@ struct QuickRecordWidgetView: View {
                         .contentShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
+
+                    Button(intent: QuickRecordCancelIntent()) {
+                        HStack {
+                            Text("取消")
+                                .font(.headline)
+                            Spacer()
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(.regularMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .contentShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    ForEach(entry.smallChoices, id: \.self) { choice in
+                        Button(intent: QuickRecordActionIntent(trigger: choice)) {
+                            HStack {
+                                Text(choice.zhLabel)
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.55)
+                                Spacer()
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(.regularMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .contentShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
 
@@ -146,18 +223,44 @@ struct QuickRecordWidgetView: View {
                 .font(.headline)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                ForEach(entry.mediumChoices, id: \.self) { choice in
-                    Button(intent: QuickRecordActionIntent(trigger: choice)) {
-                        Text(choice.zhLabel)
+                if entry.hasPendingCraving {
+                    Button(intent: QuickRecordConfirmIntent()) {
+                        Text("确认")
                             .font(.caption2)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity, minHeight: 36)
                             .background(.regularMaterial)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
                     .buttonStyle(.plain)
+
+                    Button(intent: QuickRecordCancelIntent()) {
+                        Text("取消")
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(.regularMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    ForEach(entry.mediumChoices, id: \.self) { choice in
+                        Button(intent: QuickRecordActionIntent(trigger: choice)) {
+                            Text(choice.zhLabel)
+                                .font(.caption2)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.5)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                                .background(.regularMaterial)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
 
@@ -181,6 +284,7 @@ struct QuickRecordWidgetView: View {
 struct QuickRecordEntry: TimelineEntry {
     let date: Date
     let pendingCount: Int
+    let hasPendingCraving: Bool
     let latestActionFeedback: WidgetQuickRecordActionFeedback?
     let smallChoices: [TriggerTypeWidgetOption]
     let mediumChoices: [TriggerTypeWidgetOption]
@@ -191,6 +295,7 @@ struct QuickRecordProvider: AppIntentTimelineProvider {
         QuickRecordEntry(
             date: .now,
             pendingCount: 0,
+            hasPendingCraving: false,
             latestActionFeedback: nil,
             smallChoices: WidgetQuickRecordStore.defaultSmall.map { TriggerTypeWidgetOption.from(rawValue: $0) },
             mediumChoices: WidgetQuickRecordStore.defaultMedium.map { TriggerTypeWidgetOption.from(rawValue: $0) }
@@ -215,9 +320,14 @@ struct QuickRecordProvider: AppIntentTimelineProvider {
 
     private func buildEntry(now: Date = .now) -> QuickRecordEntry {
         let prefs = WidgetQuickRecordStore.loadPreferences()
+        let context = ModelContext(SharedModelContainerFactory.shared)
+        let setting = AppSetting.fetchOrCreate(in: context)
+        let timeZone = TimeZone(identifier: setting.timezoneIdentifier) ?? .current
+        let flow = CravingFlowService(logWriter: LogWriteService(timeZone: timeZone))
         return QuickRecordEntry(
             date: now,
             pendingCount: WidgetQuickRecordStore.pendingCount(),
+            hasPendingCraving: flow.latestPending(in: context) != nil,
             latestActionFeedback: WidgetQuickRecordStore.loadLatestActionFeedback(now: now),
             smallChoices: prefs.small.map { TriggerTypeWidgetOption.from(rawValue: $0) },
             mediumChoices: prefs.medium.map { TriggerTypeWidgetOption.from(rawValue: $0) }

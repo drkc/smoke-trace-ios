@@ -145,6 +145,10 @@ enum WidgetQuickRecordStore {
     static func saveLatestActionFeedback(triggerRawValue: String, createdAt: Date, isDirectWrite: Bool) {
         let label = TriggerPrimary(rawValue: triggerRawValue)?.zhLabel ?? "未知"
         let message = isDirectWrite ? "已记录：\(label)" : "已加入待入库：\(label)"
+        saveLatestActionFeedback(message: message, createdAt: createdAt, isDirectWrite: isDirectWrite)
+    }
+
+    static func saveLatestActionFeedback(message: String, createdAt: Date = Date(), isDirectWrite: Bool = true) {
         let payload = WidgetQuickRecordActionFeedback(
             message: message,
             createdAt: createdAt,
