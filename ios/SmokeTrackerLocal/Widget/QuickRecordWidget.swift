@@ -319,36 +319,35 @@ struct SmokingDashboardWidgetView: View {
     let entry: SmokingDashboardEntry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Label("第\(entry.weekNumber)周", systemImage: "calendar.badge.clock")
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 Text("Day \(entry.dayNumber)")
-                    .font(.caption2.monospacedDigit())
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 statTile(icon: "clock.arrow.trianglehead.counterclockwise.rotate.90", title: "距上一根", value: entry.sinceLastText)
                 statTile(icon: "flame.fill", title: "今日已抽", value: "\(entry.smokedCount)")
+                statTile(icon: "scope", title: "目标上限", value: entry.goalUpperLimit == 0 ? "Quit" : "≤\(entry.goalUpperLimit)")
             }
 
-            HStack(spacing: 6) {
-                Image(systemName: "scope")
+            HStack(spacing: 8) {
+                Image(systemName: entry.goalUpperLimit == 0 ? "checkmark.seal.fill" : "target")
                     .font(.caption)
-                    .foregroundStyle(.teal)
-                Text("目标上限")
+                    .foregroundStyle(entry.goalUpperLimit == 0 ? .green : .teal)
+                Text(entry.goalUpperLimit == 0 ? "本周为 Quit Day 周" : "本周目标：控制在上限内，优先拉长间隔")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Spacer()
-                Text(entry.goalUpperLimit == 0 ? "Quit Day" : "≤\(entry.goalUpperLimit)")
-                    .font(.headline.monospacedDigit())
-                    .foregroundStyle(entry.goalUpperLimit == 0 ? .green : .primary)
             }
         }
-        .padding(12)
+        .padding(14)
         .containerBackground(
             LinearGradient(
                 colors: [Color(.secondarySystemBackground), Color(.tertiarySystemBackground)],
@@ -386,7 +385,7 @@ struct SmokingDashboardWidget: Widget {
             SmokingDashboardWidgetView(entry: entry)
         }
         .configurationDisplayName("戒烟进度看板")
-        .description("2×2 看板：周次、天数、距上一根、今日已抽与目标上限")
-        .supportedFamilies([.systemSmall])
+        .description("2×4 看板：周次、天数、距上一根、今日已抽与目标上限")
+        .supportedFamilies([.systemMedium])
     }
 }
