@@ -6,5 +6,6 @@ struct SmokeTrackerWidgetBundle: WidgetBundle {
     var body: some Widget {
         QuickRecordWidget()
         SmokingDashboardWidget()
+        SmokingMiniDashboardWidget()
     }
 }

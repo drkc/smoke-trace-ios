@@ -389,3 +389,63 @@ struct SmokingDashboardWidget: Widget {
         .supportedFamilies([.systemMedium])
     }
 }
+
+private let smokingMiniDashboardWidgetKind = "SmokingMiniDashboardWidget"
+
+struct SmokingMiniDashboardWidgetView: View {
+    let entry: SmokingDashboardEntry
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                miniMetric(icon: "clock.fill", value: entry.sinceLastText)
+                miniMetric(icon: "flame.fill", value: "\(entry.smokedCount)")
+                miniMetric(icon: "scope", value: entry.goalUpperLimit == 0 ? "0" : "\(entry.goalUpperLimit)")
+            }
+
+            HStack {
+                Text("W\(entry.weekNumber) · D\(entry.dayNumber)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+        .padding(12)
+        .containerBackground(
+            LinearGradient(
+                colors: [Color(.secondarySystemBackground), Color(.tertiarySystemBackground)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            for: .widget
+        )
+    }
+
+    @ViewBuilder
+    private func miniMetric(icon: String, value: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, minHeight: 52)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+struct SmokingMiniDashboardWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: smokingMiniDashboardWidgetKind, provider: SmokingDashboardProvider()) { entry in
+            SmokingMiniDashboardWidgetView(entry: entry)
+        }
+        .configurationDisplayName("戒烟极简看板")
+        .description("2×2 极简：时间、已抽、上限")
+        .supportedFamilies([.systemSmall])
+    }
+}
