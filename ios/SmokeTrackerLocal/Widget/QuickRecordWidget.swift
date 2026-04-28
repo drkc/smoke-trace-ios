@@ -269,8 +269,10 @@ struct SmokingDashboardProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SmokingDashboardEntry>) -> Void) {
         let now = Date()
-        let entry = buildEntry(now: now)
-        completion(Timeline(entries: [entry], policy: .after(now.addingTimeInterval(60))))
+        let entries = (0..<61).map { offset in
+            buildEntry(now: now.addingTimeInterval(TimeInterval(offset * 60)))
+        }
+        completion(Timeline(entries: entries, policy: .atEnd))
     }
 
     private func buildEntry(now: Date) -> SmokingDashboardEntry {

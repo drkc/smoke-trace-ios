@@ -17,9 +17,6 @@ struct DataManagementSettingsView: View {
             }
 
             Section("导出") {
-                Button("导出 JSON（兼容格式）到 Documents") {
-                    exportJSONCompatible()
-                }
                 Button("导出 JSON（AI 分析 v2）到 Documents") {
                     exportJSONForAI()
                 }
@@ -57,31 +54,6 @@ struct DataManagementSettingsView: View {
             exportMessage = "已清空所有记录"
         } catch {
             exportMessage = "清空失败：\(error.localizedDescription)"
-        }
-    }
-
-    private func exportJSONCompatible() {
-        do {
-            let logs = try modelContext.fetch(FetchDescriptor<SmokeLog>()).sorted(by: { $0.createdAt < $1.createdAt })
-            let payload = logs.map {
-                [
-                    "id": $0.id,
-                    "created_at": ISO8601DateFormatter().string(from: $0.createdAt),
-                    "trigger_primary": $0.triggerPrimary.rawValue,
-                    "trigger_secondary": $0.triggerSecondary ?? "",
-                    "delayed_10min": $0.delayed10min ? "1" : "0",
-                    "minutes_since_last": $0.minutesSinceLast?.description ?? "",
-                    "count_in_day": String($0.countInDay),
-                    "is_backfill": $0.isBackfill ? "1" : "0"
-                ]
-            }
-
-            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
-            let url = documentsURL().appendingPathComponent("smoke-local-export.compat.json")
-            try data.write(to: url)
-            exportMessage = "兼容 JSON 已导出：\(url.lastPathComponent)"
-        } catch {
-            exportMessage = "导出失败：\(error.localizedDescription)"
         }
     }
 
