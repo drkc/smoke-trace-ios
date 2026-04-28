@@ -11,6 +11,7 @@ enum SharedModelContainerFactory {
         Schema([
             SmokeLog.self,
             AppSetting.self,
+            CravingEvent.self,
         ])
     }
 

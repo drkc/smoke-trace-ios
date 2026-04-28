@@ -5,5 +5,6 @@ import SwiftUI
 struct SmokeTrackerWidgetBundle: WidgetBundle {
     var body: some Widget {
         QuickRecordWidget()
+        SmokingDashboardWidget()
     }
 }

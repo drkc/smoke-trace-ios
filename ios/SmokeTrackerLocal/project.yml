@@ -49,8 +49,10 @@ targets:
       - path: Domain/Models/InsightType.swift
       - path: Domain/Models/SmokeLog.swift
       - path: Domain/Models/AppSetting.swift
+      - path: Domain/Models/CravingEvent.swift
       - path: Domain/Services/StatsService.swift
       - path: Domain/Services/LogWriteService.swift
+      - path: Domain/Services/CessationDailyMetricsService.swift
     settings:
       base:
         PRODUCT_NAME: SmokeTrackerWidget

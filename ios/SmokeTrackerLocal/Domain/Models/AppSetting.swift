@@ -9,6 +9,7 @@ final class AppSetting {
     var biometricsEnabled: Bool
     var timezoneIdentifier: String
     var suggestionEngineEnabled: Bool
+    var cessationPlanStartDate: Date?
 
     init(
         id: Int = 1,
@@ -16,7 +17,8 @@ final class AppSetting {
         pinHash: String? = nil,
         biometricsEnabled: Bool = false,
         timezoneIdentifier: String = TimeZone.current.identifier,
-        suggestionEngineEnabled: Bool = true
+        suggestionEngineEnabled: Bool = true,
+        cessationPlanStartDate: Date? = nil
     ) {
         self.id = id
         self.pinEnabled = pinEnabled
@@ -24,6 +26,7 @@ final class AppSetting {
         self.biometricsEnabled = biometricsEnabled
         self.timezoneIdentifier = timezoneIdentifier
         self.suggestionEngineEnabled = suggestionEngineEnabled
+        self.cessationPlanStartDate = cessationPlanStartDate
     }
 }
 

@@ -11,8 +11,6 @@ struct HomeFeedback {
     let title: String
     let detail: String
     let tip: String?
-    let canRevert: Bool
-    let canMarkDelayed: Bool
     let latestLogID: String?
 }
 
@@ -21,22 +19,71 @@ final class HomeViewModel: ObservableObject {
     @Published var feedback: HomeFeedback?
     @Published var todayCountText: String = "-"
     @Published var sinceLastText: String = "-"
+    @Published var pendingCravingText: String = "无"
+    @Published var canConfirmSmoked: Bool = false
+    @Published var dailyMetrics = CessationDailyMetrics(
+        smokedCount: 0,
+        idleCount: 0,
+        workTransitionCount: 0,
+        delayedCount: 0,
+        minIntervalMinutes: nil,
+        cravingCount: 0,
+        cravingSmokedCount: 0,
+        cravingResistedCount: 0
+    )
+    @Published var warningLines: [String] = []
+    @Published var nightlyReviewLines: [String] = []
+    @Published var activeWeekLabel: String = "第1周"
+
+    var goalSmokedCount: Int { activeGoal.maxSmokedCount }
+    var goalIdleCount: Int { activeGoal.maxIdleCount }
+    var goalWorkTransitionCount: Int { activeGoal.maxWorkTransitionCount }
+    var goalDelayedCount: Int { activeGoal.minDelayedCount }
+    var goalMinIntervalMinutes: Int { activeGoal.minIntervalMinutes }
+
+    private var activeGoal = CessationWeeklyGoal.week1Default
 
     private let context: ModelContext
     private var logWriter: LogWriteService
+    private var cravingFlow: CravingFlowService
     private var suggestionEngineEnabled: Bool = true
+    private var planStartDate: Date?
 
     init(context: ModelContext, setting: AppSetting? = nil) {
         self.context = context
         let resolvedSetting = setting ?? AppSetting()
         self.logWriter = LogWriteService(timeZone: HomeViewModel.resolveTimeZone(from: resolvedSetting.timezoneIdentifier))
+        self.cravingFlow = CravingFlowService(logWriter: logWriter)
         self.suggestionEngineEnabled = resolvedSetting.suggestionEngineEnabled
+
+        if let setting {
+            if let existing = setting.cessationPlanStartDate {
+                self.planStartDate = existing
+            } else {
+                setting.cessationPlanStartDate = Date()
+                try? context.save()
+                self.planStartDate = setting.cessationPlanStartDate
+            }
+        } else {
+            self.planStartDate = Date()
+        }
+
         refreshSummary()
     }
 
     func apply(setting: AppSetting) {
         logWriter = LogWriteService(timeZone: Self.resolveTimeZone(from: setting.timezoneIdentifier))
+        cravingFlow = CravingFlowService(logWriter: logWriter)
         suggestionEngineEnabled = setting.suggestionEngineEnabled
+
+        if let existing = setting.cessationPlanStartDate {
+            planStartDate = existing
+        } else {
+            setting.cessationPlanStartDate = Date()
+            try? context.save()
+            planStartDate = setting.cessationPlanStartDate
+        }
+
         refreshSummary()
     }
 
@@ -44,37 +91,35 @@ final class HomeViewModel: ObservableObject {
         let logs = fetchAllLogs()
         todayCountText = String(StatsService.countInDay(for: Date(), logs: logs, timeZone: logWriter.timeZone))
         sinceLastText = formatSinceLastText(minutes: StatsService.minutesFromNow(to: logs.sorted(by: { $0.createdAt > $1.createdAt }).first?.createdAt))
+
+        let cravings = fetchAllCravings()
+        dailyMetrics = CessationDailyMetricsService(timeZone: logWriter.timeZone)
+            .build(for: Date(), logs: logs, cravings: cravings)
+
+        activeGoal = CessationGoalResolver(timeZone: logWriter.timeZone)
+            .resolveGoal(for: Date(), planStartDate: planStartDate)
+        activeWeekLabel = "第\(activeGoal.weekNumber)周"
+
+        warningLines = dailyMetrics.warningLines(goal: activeGoal)
+        nightlyReviewLines = dailyMetrics.nightlyReviewLines(goal: activeGoal)
+
+        if let pending = cravingFlow.latestPending(in: context) {
+            canConfirmSmoked = true
+            pendingCravingText = "\(pending.triggerPrimary.zhLabel)（\(formatSinceNow(from: pending.createdAt))）"
+        } else {
+            canConfirmSmoked = false
+            pendingCravingText = "无"
+        }
     }
 
-    func quickLog(trigger: TriggerPrimary) {
+    func prepareCraving(trigger: TriggerPrimary) {
         do {
-            let logs = fetchAllLogs()
-            let log = try logWriter.createLog(
-                in: context,
-                existingLogs: logs,
-                trigger: trigger,
-                triggerSecondary: nil,
-                delayed10min: false,
-                createdAt: Date(),
-                isBackfill: false
-            )
-
-            let pace = calcVsYesterdaySoFar(logs: fetchAllLogs(), at: log.createdAt)
-            let tip = suggestionEngineEnabled ? TipPool.nextTip(
-                trigger: trigger,
-                minutesSinceLast: log.minutesSinceLast,
-                countInDay: log.countInDay,
-                delayed10min: false,
-                vsYesterdaySoFar: pace
-            ) : nil
-
+            let event = try cravingFlow.createPendingCraving(in: context, trigger: trigger)
             feedback = HomeFeedback(
-                title: "已记录",
-                detail: "\(trigger.zhLabel)（今日第 \(log.countInDay) 根，距上一根 \(log.minutesSinceLast?.description ?? "-") 分钟）",
-                tip: tip,
-                canRevert: true,
-                canMarkDelayed: true,
-                latestLogID: log.id
+                title: "已记录准备抽",
+                detail: "\(event.triggerPrimary.zhLabel)（\(formatTime(event.createdAt))）",
+                tip: "先拖10分钟，再决定要不要抽",
+                latestLogID: nil
             )
             refreshSummary()
         } catch {
@@ -82,132 +127,45 @@ final class HomeViewModel: ObservableObject {
                 title: "保存失败",
                 detail: error.localizedDescription,
                 tip: nil,
-                canRevert: false,
-                canMarkDelayed: false,
                 latestLogID: nil
             )
         }
     }
 
-    func backfill(trigger: TriggerPrimary, createdAt: Date, secondary: String?, delayed10min: Bool) {
+    func confirmSmokedNow() {
         do {
-            if createdAt.timeIntervalSinceNow > 60 {
+            guard let result = try cravingFlow.confirmSmokedNearestPending(in: context) else {
                 feedback = HomeFeedback(
-                    title: "补记失败",
-                    detail: "补记时间不能晚于当前时间",
+                    title: "暂无待确认",
+                    detail: "请先点一次“准备抽一支”",
                     tip: nil,
-                    canRevert: false,
-                    canMarkDelayed: false,
                     latestLogID: nil
                 )
                 return
             }
 
-            let logs = fetchAllLogs()
-            let log = try logWriter.createLog(
-                in: context,
-                existingLogs: logs,
-                trigger: trigger,
-                triggerSecondary: secondary,
-                delayed10min: delayed10min,
-                createdAt: createdAt,
-                isBackfill: true
-            )
-
-            let pace = calcVsYesterdaySoFar(logs: fetchAllLogs(), at: log.createdAt)
+            let pace = calcVsYesterdaySoFar(logs: fetchAllLogs(), at: result.log.createdAt)
             let tip = suggestionEngineEnabled ? TipPool.nextTip(
-                trigger: trigger,
-                minutesSinceLast: log.minutesSinceLast,
-                countInDay: log.countInDay,
-                delayed10min: delayed10min,
+                trigger: result.log.triggerPrimary,
+                minutesSinceLast: result.log.minutesSinceLast,
+                countInDay: result.log.countInDay,
+                delayed10min: result.log.delayed10min,
                 vsYesterdaySoFar: pace
             ) : nil
 
+            let delayText = result.delayedEffective ? "已拖延≥10分钟" : "未达到10分钟"
             feedback = HomeFeedback(
-                title: "补记已保存",
-                detail: "\(trigger.zhLabel)（当日第 \(log.countInDay) 根，距上一根 \(log.minutesSinceLast?.description ?? "-") 分钟）",
+                title: "已确认抽了",
+                detail: "\(result.log.triggerPrimary.zhLabel)（今日第 \(result.log.countInDay) 根，\(delayText)）",
                 tip: tip,
-                canRevert: true,
-                canMarkDelayed: false,
-                latestLogID: log.id
+                latestLogID: result.log.id
             )
             refreshSummary()
         } catch {
             feedback = HomeFeedback(
-                title: "补记失败",
+                title: "确认失败",
                 detail: error.localizedDescription,
                 tip: nil,
-                canRevert: false,
-                canMarkDelayed: false,
-                latestLogID: nil
-            )
-        }
-    }
-
-    func revertLatest() {
-        do {
-            let ok = try logWriter.revertLatest(in: context, logs: fetchAllLogs())
-            feedback = HomeFeedback(
-                title: ok ? "已撤销" : "暂无可撤销记录",
-                detail: ok ? "已撤销最新记录" : "当前没有记录",
-                tip: nil,
-                canRevert: false,
-                canMarkDelayed: false,
-                latestLogID: nil
-            )
-            refreshSummary()
-        } catch {
-            feedback = HomeFeedback(
-                title: "撤销失败",
-                detail: error.localizedDescription,
-                tip: nil,
-                canRevert: false,
-                canMarkDelayed: false,
-                latestLogID: nil
-            )
-        }
-    }
-
-    func markLatestDelayed() {
-        do {
-            let logs = fetchAllLogs().sorted(by: { $0.createdAt > $1.createdAt })
-            guard let latest = logs.first else {
-                feedback = HomeFeedback(
-                    title: "暂无可标记记录",
-                    detail: "当前没有记录",
-                    tip: nil,
-                    canRevert: false,
-                    canMarkDelayed: false,
-                    latestLogID: nil
-                )
-                return
-            }
-            try logWriter.markDelayed(in: context, log: latest)
-
-            let pace = calcVsYesterdaySoFar(logs: fetchAllLogs(), at: Date())
-            let tip = suggestionEngineEnabled ? TipPool.nextTip(
-                trigger: latest.triggerPrimary,
-                minutesSinceLast: latest.minutesSinceLast,
-                countInDay: latest.countInDay,
-                delayed10min: true,
-                vsYesterdaySoFar: pace
-            ) : nil
-
-            feedback = HomeFeedback(
-                title: "已标记",
-                detail: "这次有先拖10分钟",
-                tip: tip,
-                canRevert: true,
-                canMarkDelayed: false,
-                latestLogID: latest.id
-            )
-        } catch {
-            feedback = HomeFeedback(
-                title: "更新失败",
-                detail: error.localizedDescription,
-                tip: nil,
-                canRevert: false,
-                canMarkDelayed: false,
                 latestLogID: nil
             )
         }
@@ -236,6 +194,10 @@ final class HomeViewModel: ObservableObject {
         (try? context.fetch(FetchDescriptor<SmokeLog>())) ?? []
     }
 
+    private func fetchAllCravings() -> [CravingEvent] {
+        (try? context.fetch(FetchDescriptor<CravingEvent>())) ?? []
+    }
+
     private static func resolveTimeZone(from identifier: String) -> TimeZone {
         TimeZone(identifier: identifier) ?? .current
     }
@@ -251,5 +213,22 @@ final class HomeViewModel: ObservableObject {
             return "\(hours) 小时"
         }
         return "\(hours) 小时 \(remain) 分钟"
+    }
+
+    private func formatSinceNow(from date: Date) -> String {
+        let minutes = max(0, Int(Date().timeIntervalSince(date) / 60))
+        if minutes < 1 { return "刚刚" }
+        if minutes < 60 { return "\(minutes)分钟前" }
+        let hours = minutes / 60
+        let remain = minutes % 60
+        if remain == 0 { return "\(hours)小时前" }
+        return "\(hours)小时\(remain)分钟前"
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
     }
 }

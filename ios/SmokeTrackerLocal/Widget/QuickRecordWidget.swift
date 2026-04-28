@@ -1,6 +1,7 @@
 import WidgetKit
 import SwiftUI
 import AppIntents
+import SwiftData
 
 private let quickRecordWidgetKind = "QuickRecordWidget"
 
@@ -234,5 +235,152 @@ struct QuickRecordWidget: Widget {
         .configurationDisplayName("快速记录")
         .description("小号 2 按钮 / 中号 4 按钮，可在 App 设置中自定义")
         .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+private let smokingDashboardWidgetKind = "SmokingDashboardWidget"
+
+struct SmokingDashboardEntry: TimelineEntry {
+    let date: Date
+    let weekNumber: Int
+    let dayNumber: Int
+    let sinceLastText: String
+    let smokedCount: Int
+    let goalUpperLimit: Int
+}
+
+struct SmokingDashboardProvider: TimelineProvider {
+    func placeholder(in context: Context) -> SmokingDashboardEntry {
+        SmokingDashboardEntry(
+            date: .now,
+            weekNumber: 1,
+            dayNumber: 1,
+            sinceLastText: "1h20m",
+            smokedCount: 3,
+            goalUpperLimit: 14
+        )
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (SmokingDashboardEntry) -> Void) {
+        completion(buildEntry(now: Date()))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<SmokingDashboardEntry>) -> Void) {
+        let now = Date()
+        let entry = buildEntry(now: now)
+        completion(Timeline(entries: [entry], policy: .after(now.addingTimeInterval(60))))
+    }
+
+    private func buildEntry(now: Date) -> SmokingDashboardEntry {
+        let context = ModelContext(SharedModelContainerFactory.shared)
+        let setting = AppSetting.fetchOrCreate(in: context)
+        let timeZone = TimeZone(identifier: setting.timezoneIdentifier) ?? .current
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        let logs = (try? context.fetch(FetchDescriptor<SmokeLog>())) ?? []
+        let todayCount = StatsService.countInDay(for: now, logs: logs, timeZone: timeZone)
+        let latest = logs.max(by: { $0.createdAt < $1.createdAt })
+        let sinceText = formatDuration(StatsService.minutesFromNow(to: latest?.createdAt, now: now))
+
+        let startDate = setting.cessationPlanStartDate ?? now
+        let goal = CessationGoalResolver(timeZone: timeZone).resolveGoal(for: now, planStartDate: startDate)
+        let dayNumber = max(1, (calendar.dateComponents([.day], from: calendar.startOfDay(for: startDate), to: calendar.startOfDay(for: now)).day ?? 0) + 1)
+
+        return SmokingDashboardEntry(
+            date: now,
+            weekNumber: goal.weekNumber,
+            dayNumber: dayNumber,
+            sinceLastText: sinceText,
+            smokedCount: todayCount,
+            goalUpperLimit: goal.maxSmokedCount
+        )
+    }
+
+    private func formatDuration(_ minutes: Int?) -> String {
+        guard let minutes else { return "-" }
+        if minutes <= 0 { return "刚刚" }
+        if minutes < 60 { return "\(minutes)m" }
+        let h = minutes / 60
+        let m = minutes % 60
+        if m == 0 { return "\(h)h" }
+        return "\(h)h\(m)m"
+    }
+}
+
+struct SmokingDashboardWidgetView: View {
+    let entry: SmokingDashboardEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("第\(entry.weekNumber)周", systemImage: "calendar.badge.clock")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Text("Day \(entry.dayNumber)")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
+                statTile(icon: "clock.arrow.trianglehead.counterclockwise.rotate.90", title: "距上一根", value: entry.sinceLastText)
+                statTile(icon: "flame.fill", title: "今日已抽", value: "\(entry.smokedCount)")
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "scope")
+                    .font(.caption)
+                    .foregroundStyle(.teal)
+                Text("目标上限")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(entry.goalUpperLimit == 0 ? "Quit Day" : "≤\(entry.goalUpperLimit)")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(entry.goalUpperLimit == 0 ? .green : .primary)
+            }
+        }
+        .padding(12)
+        .containerBackground(
+            LinearGradient(
+                colors: [Color(.secondarySystemBackground), Color(.tertiarySystemBackground)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            for: .widget
+        )
+    }
+
+    @ViewBuilder
+    private func statTile(icon: String, title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: icon)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+struct SmokingDashboardWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: smokingDashboardWidgetKind, provider: SmokingDashboardProvider()) { entry in
+            SmokingDashboardWidgetView(entry: entry)
+        }
+        .configurationDisplayName("戒烟进度看板")
+        .description("2×2 看板：周次、天数、距上一根、今日已抽与目标上限")
+        .supportedFamilies([.systemSmall])
     }
 }
