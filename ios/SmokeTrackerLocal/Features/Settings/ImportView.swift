@@ -13,7 +13,7 @@ struct ImportView: View {
     var body: some View {
         Form {
             Section("导入") {
-                Text("支持导入现有 Worker 端 /api/export?format=json 导出的 JSON 文件。")
+                Text("支持导入 Worker 兼容 JSON 与 AI 分析 v2 JSON 文件。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Button("选择并导入 JSON") {
@@ -71,7 +71,7 @@ struct ImportView: View {
             let importer = WorkerJsonImporter(timeZone: .current)
             let output = try importer.importFromWorkerJSON(data: data, context: modelContext)
             isError = false
-            importMessage = "导入完成：新增 \(output.inserted) 条，跳过 \(output.skipped) 条"
+            importMessage = "导入完成：日志新增 \(output.inserted) 条，日志跳过 \(output.skipped) 条；起意新增 \(output.cravingsInserted) 条，起意跳过 \(output.cravingsSkipped) 条"
             report = output.report
         } catch {
             isError = true

@@ -4,17 +4,20 @@ struct WorkerExportPayload: Decodable {
     let exportedAt: Date?
     let timezone: String?
     let logs: [WorkerExportLog]
+    let cravings: [WorkerExportCraving]
 
     enum CodingKeys: String, CodingKey {
         case exportedAt = "exported_at"
         case timezone
         case logs
+        case cravings
     }
 
-    init(exportedAt: Date?, timezone: String?, logs: [WorkerExportLog]) {
+    init(exportedAt: Date?, timezone: String?, logs: [WorkerExportLog], cravings: [WorkerExportCraving]) {
         self.exportedAt = exportedAt
         self.timezone = timezone
         self.logs = logs
+        self.cravings = cravings
     }
 
     init(from decoder: Decoder) throws {
@@ -22,6 +25,38 @@ struct WorkerExportPayload: Decodable {
         exportedAt = container.decodeLossyDateIfPresent(forKey: .exportedAt)
         timezone = try container.decodeIfPresent(String.self, forKey: .timezone)
         logs = try container.decode([WorkerExportLog].self, forKey: .logs)
+        cravings = (try? container.decode([WorkerExportCraving].self, forKey: .cravings)) ?? []
+    }
+}
+
+struct WorkerExportCraving: Decodable {
+    let id: String
+    let createdAt: Date?
+    let triggerPrimary: String
+    let triggerSecondary: String?
+    let status: String?
+    let resolvedAt: Date?
+    let linkedSmokeLogID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case createdAt = "created_at"
+        case triggerPrimary = "trigger_primary"
+        case triggerSecondary = "trigger_secondary"
+        case status
+        case resolvedAt = "resolved_at"
+        case linkedSmokeLogID = "linked_smoke_log_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        createdAt = container.decodeLossyDateIfPresent(forKey: .createdAt)
+        triggerPrimary = try container.decode(String.self, forKey: .triggerPrimary)
+        triggerSecondary = container.decodeLossyStringIfPresent(forKey: .triggerSecondary)
+        status = container.decodeLossyStringIfPresent(forKey: .status)
+        resolvedAt = container.decodeLossyDateIfPresent(forKey: .resolvedAt)
+        linkedSmokeLogID = container.decodeLossyStringIfPresent(forKey: .linkedSmokeLogID)
     }
 }
 

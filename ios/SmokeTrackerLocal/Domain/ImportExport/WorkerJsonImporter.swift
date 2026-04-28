@@ -53,6 +53,8 @@ struct WorkerJsonImporter {
         let skipped: Int
         let duplicateCount: Int
         let invalidTriggerCount: Int
+        let cravingsInserted: Int
+        let cravingsSkipped: Int
         let report: ReconciliationReport
     }
 
@@ -107,6 +109,11 @@ struct WorkerJsonImporter {
         var insertedTriggerMap: [TriggerPrimary: Int] = [:]
         var sourceTriggerMap: [TriggerPrimary: Int] = [:]
 
+        var cravingsInserted = 0
+        var cravingsSkipped = 0
+        let existingCravings = try context.fetch(FetchDescriptor<CravingEvent>())
+        var existingCravingIDs = Set(existingCravings.map { $0.id })
+
         for item in payload.logs {
             let normalizedID = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !normalizedID.isEmpty else {
@@ -151,7 +158,40 @@ struct WorkerJsonImporter {
             insertedTriggerMap[trigger, default: 0] += 1
         }
 
-        if inserted > 0 {
+        for item in payload.cravings {
+            let normalizedID = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedID.isEmpty else {
+                cravingsSkipped += 1
+                continue
+            }
+            guard let createdAt = item.createdAt,
+                  let trigger = TriggerPrimary(rawValue: item.triggerPrimary) else {
+                cravingsSkipped += 1
+                continue
+            }
+            if existingCravingIDs.contains(normalizedID) {
+                cravingsSkipped += 1
+                continue
+            }
+
+            let statusRaw = (item.status ?? "pending").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let status = CravingEventStatus(rawValue: statusRaw) ?? .pending
+
+            let event = CravingEvent(
+                id: normalizedID,
+                createdAt: createdAt,
+                triggerPrimary: trigger,
+                triggerSecondary: normalized(item.triggerSecondary),
+                status: status,
+                resolvedAt: item.resolvedAt,
+                linkedSmokeLogID: normalized(item.linkedSmokeLogID)
+            )
+            context.insert(event)
+            existingCravingIDs.insert(normalizedID)
+            cravingsInserted += 1
+        }
+
+        if inserted > 0 || cravingsInserted > 0 {
             try context.save()
             try recalculateDerivedFields(context: context, timeZone: effectiveTimeZone)
         } else if invalidDateCount > 0 || invalidIDCount > 0 {
@@ -185,6 +225,8 @@ struct WorkerJsonImporter {
             skipped: skipped,
             duplicateCount: duplicateCount,
             invalidTriggerCount: invalidTriggerCount,
+            cravingsInserted: cravingsInserted,
+            cravingsSkipped: cravingsSkipped,
             report: report
         )
     }
