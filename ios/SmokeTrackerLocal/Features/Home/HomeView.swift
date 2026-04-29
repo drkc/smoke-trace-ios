@@ -4,6 +4,8 @@ struct HomeView: View {
     @StateObject var viewModel: HomeViewModel
     let refreshSignal: UUID
     @State private var showPendingActionDialog = false
+    @State private var showGoalDetails = false
+    @State private var showNightlyReview = false
     private let summaryRefreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -11,8 +13,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     summaryCard
-                    cessationCard
-                    nightlyReviewCard
+                    actionCard
 
                     AppCard {
                         HStack {
@@ -53,6 +54,9 @@ struct HomeView: View {
                     if let feedback = viewModel.feedback {
                         FeedbackCard(feedback: feedback)
                     }
+
+                    goalDetailCard
+                    nightlyReviewCard
                 }
                 .padding()
             }
@@ -78,54 +82,88 @@ struct HomeView: View {
         }
     }
 
-    private var cessationCard: some View {
+    private var goalDetailCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("今日戒烟看板（\(viewModel.activeWeekLabel)目标）")
-                    .font(.headline)
+            DisclosureGroup(isExpanded: $showGoalDetails) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("总支数：\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
+                        .font(.subheadline)
+                    Text("无聊/空档 \(viewModel.dailyMetrics.idleCount)/\(viewModel.goalIdleCount)｜工作转换 \(viewModel.dailyMetrics.workTransitionCount)/\(viewModel.goalWorkTransitionCount)")
+                        .font(.subheadline)
+                    if viewModel.hasDelayedGoal {
+                        Text("延迟达标：\(viewModel.dailyMetrics.delayedCount)/\(viewModel.goalDelayedCount)")
+                            .font(.subheadline)
+                    } else {
+                        Text("延迟达标：本周不设目标")
+                            .font(.subheadline)
+                    }
+                    if viewModel.hasIntervalGoal {
+                        Text("最短间隔：\(minIntervalText)（目标 ≥\(viewModel.goalMinIntervalMinutes) 分钟）")
+                            .font(.subheadline)
+                    } else {
+                        Text("最短间隔：\(minIntervalText)（本周不设间隔目标）")
+                            .font(.subheadline)
+                    }
+                    Text("冲动→抽烟转化率：\(viewModel.dailyMetrics.cravingConversionRateText)（冲动\(viewModel.dailyMetrics.cravingCount)，扛过\(viewModel.dailyMetrics.cravingResistedCount)）")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
 
-                Text("总支数：\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
-                    .font(.subheadline)
-                Text("无聊/空档 \(viewModel.dailyMetrics.idleCount)/\(viewModel.goalIdleCount)｜工作转换 \(viewModel.dailyMetrics.workTransitionCount)/\(viewModel.goalWorkTransitionCount)")
-                    .font(.subheadline)
-                if viewModel.hasDelayedGoal {
-                    Text("延迟达标：\(viewModel.dailyMetrics.delayedCount)/\(viewModel.goalDelayedCount)")
-                        .font(.subheadline)
-                } else {
-                    Text("延迟达标：本周不设目标")
-                        .font(.subheadline)
-                }
-                if viewModel.hasIntervalGoal {
-                    Text("最短间隔：\(minIntervalText)（目标 ≥\(viewModel.goalMinIntervalMinutes) 分钟）")
-                        .font(.subheadline)
-                } else {
-                    Text("最短间隔：\(minIntervalText)（本周不设间隔目标）")
-                        .font(.subheadline)
-                }
-                Text("冲动→抽烟转化率：\(viewModel.dailyMetrics.cravingConversionRateText)（冲动\(viewModel.dailyMetrics.cravingCount)，扛过\(viewModel.dailyMetrics.cravingResistedCount)）")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                if !viewModel.warningLines.isEmpty {
-                    Divider()
-                    ForEach(viewModel.warningLines, id: \.self) { line in
-                        Text(line)
-                            .font(.footnote)
-                            .foregroundStyle(.orange)
+                    if !viewModel.warningLines.isEmpty {
+                        Divider()
+                        ForEach(viewModel.warningLines, id: \.self) { line in
+                            Text(line)
+                                .font(.footnote)
+                                .foregroundStyle(.orange)
+                        }
                     }
                 }
+                .padding(.top, 8)
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("今日目标详情（\(viewModel.activeWeekLabel)）")
+                        .font(.headline)
+                    Text(viewModel.goalDetailSummaryText)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var actionCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("今日行动")
+                    .font(.headline)
+                Text(viewModel.actionStatusText)
+                    .font(.subheadline)
+                Text("下一步：\(viewModel.actionNextStepText)")
+                    .font(.subheadline)
+                Text(viewModel.actionBufferText)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     private var nightlyReviewCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("每晚30秒复盘")
-                    .font(.headline)
-                ForEach(viewModel.nightlyReviewLines, id: \.self) { line in
-                    Text(line)
-                        .font(.subheadline)
+            DisclosureGroup(isExpanded: $showNightlyReview) {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(viewModel.nightlyReviewLines, id: \.self) { line in
+                        Text(line)
+                            .font(.subheadline)
+                    }
+                }
+                .padding(.top, 8)
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("每晚30秒复盘")
+                        .font(.headline)
+                    Text(viewModel.nightlyReviewSummaryText)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
             }
         }
@@ -140,13 +178,13 @@ struct HomeView: View {
         AppCard {
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("今日已抽")
+                    Text("今日进度")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Text(viewModel.todayCountText)
+                    Text("\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
                         .font(.system(size: 36, weight: .bold))
                         .monospacedDigit()
-                    Text("距上一根: \(viewModel.sinceLastText)")
+                    Text("距上一根：\(viewModel.sinceLastText)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
