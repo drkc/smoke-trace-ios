@@ -93,25 +93,31 @@ struct HomeView: View {
         AppCard {
             DisclosureGroup(isExpanded: $showGoalDetails) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("总支数：\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
-                        .font(.subheadline)
-                    Text("无聊/空档 \(viewModel.dailyMetrics.idleCount)/\(viewModel.goalIdleCount)｜工作转换 \(viewModel.dailyMetrics.workTransitionCount)/\(viewModel.goalWorkTransitionCount)")
-                        .font(.subheadline)
-                    if viewModel.hasDelayedGoal {
-                        Text("延迟达标：\(viewModel.dailyMetrics.delayedCount)/\(viewModel.goalDelayedCount)")
-                            .font(.subheadline)
-                    } else {
-                        Text("延迟达标：本周不设目标")
+                    if let totalLine = viewModel.goalTotalLineText {
+                        Text(totalLine)
                             .font(.subheadline)
                     }
-                    if viewModel.hasIntervalGoal {
-                        Text("最短间隔：\(minIntervalText)（目标 ≥\(viewModel.goalMinIntervalMinutes) 分钟）")
-                            .font(.subheadline)
-                    } else {
-                        Text("最短间隔：\(minIntervalText)（本周不设间隔目标）")
+
+                    Text(viewModel.goalCoreQuotaTopLineText)
+                        .font(.subheadline)
+                    Text(viewModel.goalCoreQuotaBottomLineText)
+                        .font(.subheadline)
+
+                    Text(viewModel.goalBufferLineText)
+                        .font(.subheadline)
+
+                    Text(viewModel.goalRiskLineText)
+                        .font(.subheadline)
+
+                    Text(viewModel.goalBehaviorLineText)
+                        .font(.subheadline)
+
+                    if let minIntervalLine = viewModel.goalMinIntervalLineText {
+                        Text(minIntervalLine)
                             .font(.subheadline)
                     }
-                    Text("冲动转化率：\(viewModel.dailyMetrics.cravingConversionRateText)（冲动\(viewModel.dailyMetrics.cravingCount)，扛过\(viewModel.dailyMetrics.cravingResistedCount)）")
+
+                    Text(viewModel.goalConversionLineText)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -144,11 +150,11 @@ struct HomeView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text("\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
-                        .font(.headline.weight(.bold))
+                    Text(viewModel.headerProgressText)
+                        .font(.title3.weight(.bold))
                         .monospacedDigit()
                     Text("· 距上一根 \(viewModel.sinceLastText)")
-                        .font(.footnote)
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -187,11 +193,6 @@ struct HomeView: View {
                 }
             }
         }
-    }
-
-    private var minIntervalText: String {
-        guard let min = viewModel.dailyMetrics.minIntervalMinutes else { return "-" }
-        return "\(min) 分钟"
     }
 
 }

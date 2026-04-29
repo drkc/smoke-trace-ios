@@ -131,13 +131,94 @@ final class HomeViewModel: ObservableObject {
 
     var goalDetailSummaryText: String {
         let quota = dailyMetrics.evaluateCategoryQuota(goal: activeGoal)
+        let risk = dailyMetrics.evaluateRiskTriggers(goal: activeGoal)
+
+        if activeGoal.dailyLimit == 0 {
+            if dailyMetrics.smokedCount == 0 {
+                return "今日归零 · 扛过冲动 \(dailyMetrics.cravingResistedCount)/\(activeGoal.minResistedCravings ?? 0)"
+            }
+            return "红色事件 · 下一次回到 0 支"
+        }
+
         if let top = quota.items.filter({ $0.hardOver > 0 }).max(by: { $0.hardOver < $1.hardOver }) {
             return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · \(categoryName(top.category))超出 +\(top.hardOver)"
+        }
+        if risk.isRiskTriggerElevated, let topRisk = risk.topRiskTrigger {
+            return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · \(categoryName(topRisk))偏多"
+        }
+        if risk.hasRiskTrigger, let topRisk = risk.topRiskTrigger {
+            return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · \(categoryName(topRisk)) \(risk.topRiskTriggerCount)"
         }
         if quota.bufferUsed > 0 {
             return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · 缓冲已用"
         }
         return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · 缓冲 \(quota.bufferRemaining)/\(quota.bufferTotal)"
+    }
+
+    var headerProgressText: String {
+        if activeGoal.dailyLimit == 0 {
+            return "今日归零 \(dailyMetrics.smokedCount) 支"
+        }
+        return "\(dailyMetrics.smokedCount)/\(goalSmokedCount)"
+    }
+
+    var goalTotalLineText: String? {
+        guard activeGoal.dailyLimit > 0 else { return nil }
+        return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount)"
+    }
+
+    var goalCoreQuotaTopLineText: String {
+        "起床后 \(dailyMetrics.afterWakingCount)/\(activeGoal.categoryQuota.afterWaking)｜饭后 \(dailyMetrics.afterMealCount)/\(activeGoal.categoryQuota.afterMeal)"
+    }
+
+    var goalCoreQuotaBottomLineText: String {
+        "工作转换 \(dailyMetrics.workTransitionCount)/\(activeGoal.categoryQuota.workTransition)｜无聊/空档 \(dailyMetrics.idleCount)/\(activeGoal.categoryQuota.idleTime)"
+    }
+
+    var goalBufferLineText: String {
+        let quota = dailyMetrics.evaluateCategoryQuota(goal: activeGoal)
+        if quota.totalHardOver > 0 {
+            return "缓冲已用完，分类训练目标超出"
+        }
+        if quota.bufferUsed > 0 {
+            return "缓冲 \(quota.bufferRemaining)/\(quota.bufferTotal) 已使用"
+        }
+        return "缓冲 \(quota.bufferRemaining)/\(quota.bufferTotal) 可用"
+    }
+
+    var goalRiskLineText: String {
+        let risk = dailyMetrics.evaluateRiskTriggers(goal: activeGoal)
+        guard !risk.riskTriggerBreakdown.isEmpty else {
+            return "风险触发：无"
+        }
+
+        let parts = risk.riskTriggerBreakdown.map { item in
+            "\(categoryName(item.trigger)) \(item.count)"
+        }
+        return "风险触发：\(parts.joined(separator: "｜"))"
+    }
+
+    var goalBehaviorLineText: String {
+        var parts: [String] = []
+        if let delayedTarget = activeGoal.minDelayed10mCount {
+            parts.append("延迟 \(dailyMetrics.delayedCount)/\(delayedTarget)")
+        }
+        if let resistedTarget = activeGoal.minResistedCravings {
+            parts.append("扛过冲动 \(dailyMetrics.cravingResistedCount)/\(resistedTarget)")
+        }
+        return parts.joined(separator: "｜")
+    }
+
+    var goalMinIntervalLineText: String? {
+        guard let intervalTarget = activeGoal.minIntervalMinutes,
+              let interval = dailyMetrics.minIntervalMinutes else {
+            return nil
+        }
+        return "最短间隔 \(interval) 分钟，目标 ≥\(intervalTarget) 分钟"
+    }
+
+    var goalConversionLineText: String {
+        "冲动转化率：\(dailyMetrics.cravingConversionRateText)（冲动\(dailyMetrics.cravingCount)，扛过\(dailyMetrics.cravingResistedCount)）"
     }
 
     var nightlyReviewSummaryText: String {
