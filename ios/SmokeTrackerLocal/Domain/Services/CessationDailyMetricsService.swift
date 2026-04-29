@@ -322,11 +322,21 @@ struct CessationDailyMetrics {
 
         // 5) Next focus
         let nextFocusLineText: String = {
+            if goal.dailyLimit == 0 {
+                if smokedCount == 0 {
+                    return "明天重点：继续守住 0 支，下一次 craving 先记录并尽量扛过去。"
+                }
+                return "明天重点：下一次 craving 回到 0 支计划，并记录触发点。"
+            }
+
             if let top = topHardOverItem(from: quotaEval) {
-                return composeNextFocusLine(for: top.category)
+                return composeNextFocusLine(for: top.category, reason: .hardOver)
+            }
+            if quotaEval.bufferUsed > 0, let buffered = topBufferUsedItem(from: quotaEval) {
+                return composeNextFocusLine(for: buffered.category, reason: .bufferUsed)
             }
             if let next = nextFocusCategory(goal: goal) {
-                return composeNextFocusLine(for: next)
+                return composeNextFocusLine(for: next.category, reason: next.reason)
             }
             return "明天重点：保持当前节奏，下一次 craving 先记录再决定是否抽。"
         }()
@@ -359,34 +369,87 @@ struct CessationDailyMetrics {
             .first
     }
 
-    private func nextFocusCategory(goal: CessationWeeklyGoal) -> TriggerPrimary? {
-        let usage: [(TriggerPrimary, Int, Int)] = [
-            (.idleTime, idleCount, goal.categoryQuota.idleTime),
-            (.workTransition, workTransitionCount, goal.categoryQuota.workTransition),
-            (.afterMeal, afterMealCount, goal.categoryQuota.afterMeal),
-            (.afterWaking, afterWakingCount, goal.categoryQuota.afterWaking),
-        ]
-
-        let viable = usage.filter { $0.2 > 0 }
-        guard !viable.isEmpty else { return nil }
-
-        return viable.max {
-            let lhsRatio = Double($0.1) / Double($0.2)
-            let rhsRatio = Double($1.1) / Double($1.2)
-            if lhsRatio != rhsRatio { return lhsRatio < rhsRatio }
-            return categoryPriority($0.0) > categoryPriority($1.0)
-        }?.0
+    private enum NextFocusReason {
+        case hardOver
+        case bufferUsed
+        case normal
     }
 
-    private func composeNextFocusLine(for category: TriggerPrimary) -> String {
+    private struct NextFocusChoice {
+        let category: TriggerPrimary
+        let reason: NextFocusReason
+    }
+
+    private func topBufferUsedItem(from eval: CategoryQuotaEvaluation) -> CategoryQuotaEvaluationItem? {
+        eval.items
+            .filter { $0.bufferUsed > 0 }
+            .sorted {
+                if $0.bufferUsed != $1.bufferUsed { return $0.bufferUsed > $1.bufferUsed }
+                return categoryPriority($0.category) < categoryPriority($1.category)
+            }
+            .first
+    }
+
+    private func nextFocusCategory(goal: CessationWeeklyGoal) -> NextFocusChoice? {
+        // Normal-day focus should prioritize training-value scenarios:
+        // idleTime / workTransition first. Avoid selecting afterWaking as "priority cut"
+        // when it is only at/under quota.
+        let idleUsed = idleCount
+        let idleQuota = goal.categoryQuota.idleTime
+        let workUsed = workTransitionCount
+        let workQuota = goal.categoryQuota.workTransition
+
+        let idleHas = idleUsed > 0
+        let workHas = workUsed > 0
+
+        if idleHas && workHas {
+            let idleRatio = idleQuota > 0 ? Double(idleUsed) / Double(idleQuota) : 0
+            let workRatio = workQuota > 0 ? Double(workUsed) / Double(workQuota) : 0
+            if abs(idleRatio - workRatio) <= 0.10 {
+                return .init(category: .idleTime, reason: .normal)
+            }
+            return idleRatio >= workRatio
+                ? .init(category: .idleTime, reason: .normal)
+                : .init(category: .workTransition, reason: .normal)
+        }
+
+        if idleHas { return .init(category: .idleTime, reason: .normal) }
+        if workHas { return .init(category: .workTransition, reason: .normal) }
+
+        if afterMealCount > 0 {
+            return .init(category: .afterMeal, reason: .normal)
+        }
+
+        if afterWakingCount > 0 {
+            return .init(category: .afterWaking, reason: .normal)
+        }
+
+        return nil
+    }
+
+    private func composeNextFocusLine(for category: TriggerPrimary, reason: NextFocusReason) -> String {
         let name = categoryDisplayName(category)
         switch category {
+        case .idleTime:
+            return "明天重点：优先砍 1 支\(name)烟；下一次空档先记录 craving 并延迟 10 分钟再决定。"
         case .workTransition:
             return "明天重点：优先砍 1 支\(name)烟；下一次工作转换先记录 craving，再决定是否抽。"
-        case .idleTime:
-            return "明天重点：优先砍 1 支\(name)烟；下一次空档先延迟 10 分钟再决定。"
+        case .afterMeal:
+            if reason == .bufferUsed {
+                return "明天重点：饭后已用到缓冲，下一次饭后先拖延 10 分钟再决定。"
+            }
+            return "明天重点：明天饭后先拖延 10 分钟，再决定是否抽。"
+        case .afterWaking:
+            switch reason {
+            case .hardOver:
+                return "明天重点：起床后超过训练目标，先守住起床后 1 支上限，不要扩展成第 2 支。"
+            case .bufferUsed:
+                return "明天重点：起床后已用到今日缓冲，明天先守住 1 支，不要扩展成第 2 支。"
+            case .normal:
+                return "明天重点：先守住起床后不超过 1 支，把重点放在无聊/工作转换触发。"
+            }
         default:
-            return "明天重点：优先砍 1 支\(name)烟；下一次先记录 craving 再决定是否抽。"
+            return "明天重点：下一次 craving 先记录再决定是否抽。"
         }
     }
 
