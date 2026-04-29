@@ -124,6 +124,15 @@ struct CessationGoalResolver {
     }
 }
 
+struct RiskTriggerEvaluation {
+    let riskTriggerCount: Int
+    let riskTriggerBreakdown: [(trigger: TriggerPrimary, count: Int)]
+    let topRiskTrigger: TriggerPrimary?
+    let topRiskTriggerCount: Int
+    let hasRiskTrigger: Bool
+    let isRiskTriggerElevated: Bool
+}
+
 struct CessationDailyMetrics {
     let smokedCount: Int
     let idleCount: Int
@@ -135,6 +144,10 @@ struct CessationDailyMetrics {
     let cravingResistedCount: Int
     let afterWakingCount: Int
     let afterMealCount: Int
+    let stressCount: Int
+    let drivingCount: Int
+    let socialCount: Int
+    let otherCount: Int
 
     init(
         smokedCount: Int,
@@ -146,7 +159,11 @@ struct CessationDailyMetrics {
         cravingSmokedCount: Int,
         cravingResistedCount: Int,
         afterWakingCount: Int = 0,
-        afterMealCount: Int = 0
+        afterMealCount: Int = 0,
+        stressCount: Int = 0,
+        drivingCount: Int = 0,
+        socialCount: Int = 0,
+        otherCount: Int = 0
     ) {
         self.smokedCount = smokedCount
         self.idleCount = idleCount
@@ -158,6 +175,10 @@ struct CessationDailyMetrics {
         self.cravingResistedCount = cravingResistedCount
         self.afterWakingCount = afterWakingCount
         self.afterMealCount = afterMealCount
+        self.stressCount = stressCount
+        self.drivingCount = drivingCount
+        self.socialCount = socialCount
+        self.otherCount = otherCount
     }
 
     var cravingConversionRateText: String {
@@ -222,9 +243,40 @@ struct CessationDailyMetrics {
         )
     }
 
+    func evaluateRiskTriggers(goal: CessationWeeklyGoal) -> RiskTriggerEvaluation {
+        let breakdown: [(TriggerPrimary, Int)] = [
+            (.stress, stressCount),
+            (.driving, drivingCount),
+            (.social, socialCount),
+            (.other, otherCount),
+        ]
+        .filter { $0.1 > 0 }
+        .sorted {
+            if $0.1 != $1.1 { return $0.1 > $1.1 }
+            return riskPriority($0.0) < riskPriority($1.0)
+        }
+
+        let total = breakdown.reduce(0) { $0 + $1.1 }
+        let top = breakdown.first
+
+        let elevatedByCount = (top?.1 ?? 0) >= 2 || total >= 2
+        let elevatedByQuitWeek = goal.dailyLimit == 0 && total > 0
+        let elevatedByNearLimit = goal.dailyLimit > 0 && smokedCount >= Int(ceil(Double(goal.dailyLimit) * 0.8)) && total > 0
+
+        return RiskTriggerEvaluation(
+            riskTriggerCount: total,
+            riskTriggerBreakdown: breakdown,
+            topRiskTrigger: top?.0,
+            topRiskTriggerCount: top?.1 ?? 0,
+            hasRiskTrigger: total > 0,
+            isRiskTriggerElevated: elevatedByCount || elevatedByQuitWeek || elevatedByNearLimit
+        )
+    }
+
     func warningLines(goal: CessationWeeklyGoal) -> [String] {
         var lines: [String] = []
         let quotaEval = evaluateCategoryQuota(goal: goal)
+        let riskEval = evaluateRiskTriggers(goal: goal)
 
         if goal.dailyLimit == 0 {
             if smokedCount > 0 {
@@ -237,6 +289,17 @@ struct CessationDailyMetrics {
         if quotaEval.totalHardOver > 0, let top = topHardOverItem(from: quotaEval) {
             let category = categoryDisplayName(top.category)
             lines.append("🟡 \(category)超出训练目标；剩余烟不要再用于这个场景。")
+        }
+
+        if riskEval.hasRiskTrigger, let topRisk = riskEval.topRiskTrigger {
+            let riskName = categoryDisplayName(topRisk)
+            if goal.dailyLimit == 0, smokedCount > 0 {
+                lines.append("🟡 出现\(riskName)触发；计划继续，下一次\(riskName)冲动回到 0 支。")
+            } else if riskEval.isRiskTriggerElevated {
+                lines.append("🟡 \(riskName)烟偏多；今天剩余烟不要再用于\(riskName)场景。")
+            } else {
+                lines.append("🔵 出现 1 次\(riskName)烟；\(riskNextStep(topRisk))")
+            }
         }
 
         if quotaEval.bufferUsed > 0, quotaEval.totalHardOver == 0 {
@@ -265,6 +328,7 @@ struct CessationDailyMetrics {
 
     func nightlyReviewLines(goal: CessationWeeklyGoal) -> [String] {
         let quotaEval = evaluateCategoryQuota(goal: goal)
+        let riskEval = evaluateRiskTriggers(goal: goal)
 
         let totalLine: String = {
             if goal.dailyLimit == 0 {
@@ -284,6 +348,13 @@ struct CessationDailyMetrics {
             if quotaEval.totalHardOver > 0, let top = topHardOverItem(from: quotaEval) {
                 let category = categoryDisplayName(top.category)
                 return "分类：\(category)超出 \(top.hardOver)；明天先收这一类。"
+            }
+            if riskEval.hasRiskTrigger, let topRisk = riskEval.topRiskTrigger {
+                let riskName = categoryDisplayName(topRisk)
+                if riskEval.isRiskTriggerElevated {
+                    return "分类：核心配额稳定，但\(riskName)烟偏多。"
+                }
+                return "分类：核心配额稳定，但出现\(riskName)烟。"
             }
             if quotaEval.bufferUsed > 0 {
                 return "分类：用了缓冲 \(quotaEval.bufferUsed)/\(quotaEval.bufferTotal)，整体可控。"
@@ -317,11 +388,21 @@ struct CessationDailyMetrics {
                 if smokedCount == 0 {
                     return "明天：继续守住 0 支；冲动先记录，尽量扛过。"
                 }
+                if let topRisk = riskEval.topRiskTrigger {
+                    let riskName = categoryDisplayName(topRisk)
+                    return "明天：\(riskName)冲动先记录，回到 0 支计划。"
+                }
                 return "明天：冲动来了先记录，回到 0 支计划。"
             }
 
             if let top = topHardOverItem(from: quotaEval) {
                 return composeNextFocusLine(for: top.category, reason: .hardOver)
+            }
+            if riskEval.isRiskTriggerElevated, let topRisk = riskEval.topRiskTrigger {
+                return "明天：\(riskNextStep(topRisk))"
+            }
+            if riskEval.hasRiskTrigger, let topRisk = riskEval.topRiskTrigger {
+                return "明天：\(riskNextStep(topRisk))"
             }
             if quotaEval.bufferUsed > 0, let buffered = topBufferUsedItem(from: quotaEval) {
                 return composeNextFocusLine(for: buffered.category, reason: .bufferUsed)
@@ -444,6 +525,36 @@ struct CessationDailyMetrics {
         }
     }
 
+    private func riskNextStep(_ trigger: TriggerPrimary) -> String {
+        switch trigger {
+        case .stress:
+            return "压力来了先记录冲动，离开场景 3 分钟。"
+        case .driving:
+            return "开车前先设定不抽，停车后再记录冲动。"
+        case .social:
+            return "社交前把烟放远，冲动来了先记录。"
+        case .other:
+            return "其他触发先记录原因，不直接补抽。"
+        default:
+            return "冲动先记录，拖 10 分钟。"
+        }
+    }
+
+    private func riskPriority(_ trigger: TriggerPrimary) -> Int {
+        switch trigger {
+        case .stress:
+            return 0
+        case .driving:
+            return 1
+        case .social:
+            return 2
+        case .other:
+            return 3
+        default:
+            return 99
+        }
+    }
+
     private func categoryPriority(_ category: TriggerPrimary) -> Int {
         switch category {
         case .idleTime:
@@ -478,6 +589,10 @@ struct CessationDailyMetricsService {
         let workCount = dayLogs.filter { $0.triggerPrimary == .workTransition }.count
         let afterWakingCount = dayLogs.filter { $0.triggerPrimary == .afterWaking }.count
         let afterMealCount = dayLogs.filter { $0.triggerPrimary == .afterMeal }.count
+        let stressCount = dayLogs.filter { $0.triggerPrimary == .stress }.count
+        let drivingCount = dayLogs.filter { $0.triggerPrimary == .driving }.count
+        let socialCount = dayLogs.filter { $0.triggerPrimary == .social }.count
+        let otherCount = dayLogs.filter { $0.triggerPrimary == .other }.count
         let delayedCount = dayLogs.filter { $0.delayed10min }.count
 
         // NOTE: triggers outside the configured category quota (e.g. driving/stress/other)
@@ -509,7 +624,11 @@ struct CessationDailyMetricsService {
             cravingSmokedCount: smokedCravingCount,
             cravingResistedCount: resistedCravingCount,
             afterWakingCount: afterWakingCount,
-            afterMealCount: afterMealCount
+            afterMealCount: afterMealCount,
+            stressCount: stressCount,
+            drivingCount: drivingCount,
+            socialCount: socialCount,
+            otherCount: otherCount
         )
     }
 }

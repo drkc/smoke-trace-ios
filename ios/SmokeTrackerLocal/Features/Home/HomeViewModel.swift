@@ -29,7 +29,11 @@ final class HomeViewModel: ObservableObject {
         minIntervalMinutes: nil,
         cravingCount: 0,
         cravingSmokedCount: 0,
-        cravingResistedCount: 0
+        cravingResistedCount: 0,
+        stressCount: 0,
+        drivingCount: 0,
+        socialCount: 0,
+        otherCount: 0
     )
     @Published var warningLines: [String] = []
     @Published var nightlyReviewLines: [String] = []
@@ -59,14 +63,30 @@ final class HomeViewModel: ObservableObject {
 
     var actionNextStepText: String {
         let quota = dailyMetrics.evaluateCategoryQuota(goal: activeGoal)
+        let risk = dailyMetrics.evaluateRiskTriggers(goal: activeGoal)
 
         if activeGoal.dailyLimit == 0 {
+            if let topRisk = risk.topRiskTrigger {
+                return "\(categoryName(topRisk))冲动先记录，回到 0 支。"
+            }
             return "冲动来了先记录，撑 10 分钟。"
+        }
+
+        if dailyMetrics.smokedCount > activeGoal.dailyLimit {
+            return "先回到当前周目标，不再补抽。"
         }
 
         if quota.totalHardOver > 0,
            let top = quota.items.filter({ $0.hardOver > 0 }).max(by: { $0.hardOver < $1.hardOver }) {
             return "剩余烟不要用于\(categoryName(top.category))。"
+        }
+
+        if risk.isRiskTriggerElevated, let topRisk = risk.topRiskTrigger {
+            return riskActionHint(topRisk)
+        }
+
+        if risk.hasRiskTrigger, let topRisk = risk.topRiskTrigger {
+            return riskActionHint(topRisk)
         }
 
         if quota.bufferUsed > 0,
@@ -339,6 +359,21 @@ final class HomeViewModel: ObservableObject {
         case .afterMeal: return "饭后"
         case .afterWaking: return "起床后"
         default: return trigger.zhLabel
+        }
+    }
+
+    private func riskActionHint(_ trigger: TriggerPrimary) -> String {
+        switch trigger {
+        case .stress:
+            return "压力：先记录冲动，拖 10 分钟。"
+        case .driving:
+            return "开车：先设定不抽，停车后再记录。"
+        case .social:
+            return "社交：先把烟放远，冲动先记录。"
+        case .other:
+            return "其他触发：先记录原因，不直接补抽。"
+        default:
+            return "冲动先记录，拖 10 分钟。"
         }
     }
 
