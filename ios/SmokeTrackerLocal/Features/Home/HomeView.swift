@@ -11,44 +11,52 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 14) {
+                VStack(spacing: 10) {
                     summaryCard
                     actionCard
 
                     AppCard {
-                        HStack {
-                            Text("先记录：准备抽一支")
-                                .font(.headline)
-                            Spacer()
-                            Text("第一步")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        TriggerGrid { trigger in
-                            viewModel.prepareCraving(trigger: trigger)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("先记录：准备抽一支")
+                                    .font(.headline)
+                                Spacer()
+                                Text("第一步")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            TriggerGrid { trigger in
+                                viewModel.prepareCraving(trigger: trigger)
+                            }
+                            .controlSize(.small)
+                            .scaleEffect(y: 0.94, anchor: .top)
                         }
                     }
 
                     AppCard {
-                        HStack {
-                            Text("再确认：抽了")
-                                .font(.headline)
-                            Spacer()
-                            Text("第二步")
-                                .font(.caption)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("再确认：抽了")
+                                    .font(.headline)
+                                Spacer()
+                                Text("第二步")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Text("待确认：\(viewModel.pendingCravingText)")
+                                .font(.footnote)
                                 .foregroundStyle(.secondary)
-                        }
+                                .lineLimit(1)
 
-                        Text("待确认：\(viewModel.pendingCravingText)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        Button("确认/取消") {
-                            showPendingActionDialog = true
+                            Button("确认/取消") {
+                                showPendingActionDialog = true
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .disabled(!viewModel.canConfirmSmoked)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .disabled(!viewModel.canConfirmSmoked)
                     }
 
                     if let feedback = viewModel.feedback {
@@ -58,7 +66,9 @@ struct HomeView: View {
                     goalDetailCard
                     nightlyReviewCard
                 }
-                .padding()
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
             }
             .navigationTitle("记录")
             .confirmationDialog("处理这次预备状态", isPresented: $showPendingActionDialog) {
@@ -132,21 +142,19 @@ struct HomeView: View {
 
     private var actionCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("今日行动")
                     .font(.headline)
                 Text(viewModel.actionStatusText)
                     .font(.subheadline)
+                    .lineLimit(1)
                 Text(viewModel.actionNextStepText)
                     .font(.subheadline)
+                    .lineLimit(2)
                 Text(viewModel.actionBufferText)
-                    .font(.footnote)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                if let extra = viewModel.actionExtraHintText {
-                    Text(extra)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+                    .lineLimit(1)
             }
         }
     }
@@ -182,15 +190,15 @@ struct HomeView: View {
     private var summaryCard: some View {
         AppCard {
             HStack {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("今日进度")
-                        .font(.subheadline)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                     Text("\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
-                        .font(.system(size: 36, weight: .bold))
+                        .font(.system(size: 32, weight: .bold))
                         .monospacedDigit()
                     Text("距上一根：\(viewModel.sinceLastText)")
-                        .font(.subheadline)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
