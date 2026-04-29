@@ -451,14 +451,7 @@ struct HistoryView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         } else {
-                            let statusText: String
-                            switch item.cravingStatus {
-                            case .pending: statusText = "待确认"
-                            case .smoked: statusText = "已抽"
-                            case .resisted: statusText = "已扛过"
-                            case .none: statusText = "-"
-                            }
-                            Text("起意 · \(item.trigger.zhLabel) · \(statusText)")
+                            Text("起意 · \(item.trigger.zhLabel) · \(cravingStatusText(item.cravingStatus))")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
@@ -493,5 +486,14 @@ struct HistoryView: View {
         .padding()
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func cravingStatusText(_ status: CravingEventStatus?) -> String {
+        switch status {
+        case .pending: return "待确认"
+        case .smoked: return "已抽"
+        case .resisted: return "已扛过"
+        case .none: return "-"
+        }
     }
 }
