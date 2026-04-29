@@ -5,6 +5,13 @@ import SwiftData
 
 private let quickRecordWidgetKind = "QuickRecordWidget"
 
+private func reloadAllWidgetKinds() {
+    WidgetCenter.shared.reloadTimelines(ofKind: quickRecordWidgetKind)
+    WidgetCenter.shared.reloadTimelines(ofKind: smokingDashboardWidgetKind)
+    WidgetCenter.shared.reloadTimelines(ofKind: smokingMiniDashboardWidgetKind)
+    WidgetCenter.shared.reloadAllTimelines()
+}
+
 struct QuickRecordWidgetIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "快速记录"
     static var description = IntentDescription("桌面快速记录，可在设置里自定义按钮触发原因")
@@ -37,7 +44,7 @@ struct QuickRecordActionIntent: AppIntent {
             at: now
         )
         WidgetQuickRecordStore.saveLatestActionFeedback(message: "已进入预备", createdAt: now, isDirectWrite: true)
-        WidgetCenter.shared.reloadAllTimelines()
+        reloadAllWidgetKinds()
         return .result()
     }
 }
@@ -58,7 +65,7 @@ struct QuickRecordConfirmIntent: AppIntent {
         } else {
             WidgetQuickRecordStore.saveLatestActionFeedback(message: "无待确认", createdAt: now, isDirectWrite: false)
         }
-        WidgetCenter.shared.reloadAllTimelines()
+        reloadAllWidgetKinds()
         return .result()
     }
 }
@@ -78,7 +85,7 @@ struct QuickRecordCancelIntent: AppIntent {
         } else {
             WidgetQuickRecordStore.saveLatestActionFeedback(message: "无待确认", createdAt: now, isDirectWrite: false)
         }
-        WidgetCenter.shared.reloadAllTimelines()
+        reloadAllWidgetKinds()
         return .result()
     }
 }
