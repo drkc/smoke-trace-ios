@@ -35,9 +35,14 @@ struct TriggerGrid: View {
                         .font(.body.weight(.semibold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, minHeight: buttonHeight)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.accentColor)
+                        )
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
             }
         }
     }

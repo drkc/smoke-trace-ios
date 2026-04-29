@@ -12,8 +12,7 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 10) {
-                    summaryCard
-                    actionCard
+                    statusCard
 
                     AppCard {
                         VStack(alignment: .leading, spacing: 6) {
@@ -25,10 +24,9 @@ struct HomeView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
-                            TriggerGrid(buttonHeight: 44, rowSpacing: 8, columnSpacing: 10) { trigger in
+                            TriggerGrid(buttonHeight: 52, rowSpacing: 8, columnSpacing: 10) { trigger in
                                 viewModel.prepareCraving(trigger: trigger)
                             }
-                            .controlSize(.small)
                         }
                     }
 
@@ -139,11 +137,21 @@ struct HomeView: View {
         }
     }
 
-    private var actionCard: some View {
+    private var statusCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 6) {
-                Text("今日行动")
-                    .font(.headline)
+                Text("今日状态")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
+                        .font(.headline.weight(.bold))
+                        .monospacedDigit()
+                    Text("· 距上一根 \(viewModel.sinceLastText)")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Text(viewModel.actionStatusText)
                     .font(.subheadline)
                     .lineLimit(1)
@@ -186,22 +194,4 @@ struct HomeView: View {
         return "\(min) 分钟"
     }
 
-    private var summaryCard: some View {
-        AppCard {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("今日进度")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text("\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
-                        .font(.system(size: 32, weight: .bold))
-                        .monospacedDigit()
-                    Text("距上一根：\(viewModel.sinceLastText)")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-        }
-    }
 }
