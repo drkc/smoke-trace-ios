@@ -40,6 +40,8 @@ final class HomeViewModel: ObservableObject {
     var goalWorkTransitionCount: Int { activeGoal.maxWorkTransitionCount }
     var goalDelayedCount: Int { activeGoal.minDelayedCount }
     var goalMinIntervalMinutes: Int { activeGoal.minIntervalMinutes ?? 0 }
+    var hasDelayedGoal: Bool { activeGoal.minDelayed10mCount != nil }
+    var hasIntervalGoal: Bool { activeGoal.minIntervalMinutes != nil }
 
     private var activeGoal = CessationWeeklyGoal.week1Default
 

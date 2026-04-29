@@ -86,20 +86,30 @@ struct HomeView: View {
 
                 Text("总支数：\(viewModel.dailyMetrics.smokedCount)/\(viewModel.goalSmokedCount)")
                     .font(.subheadline)
-                Text("idle_time：\(viewModel.dailyMetrics.idleCount)/\(viewModel.goalIdleCount)  |  work_transition：\(viewModel.dailyMetrics.workTransitionCount)/\(viewModel.goalWorkTransitionCount)")
+                Text("无聊/空档 \(viewModel.dailyMetrics.idleCount)/\(viewModel.goalIdleCount)｜工作转换 \(viewModel.dailyMetrics.workTransitionCount)/\(viewModel.goalWorkTransitionCount)")
                     .font(.subheadline)
-                Text("拖延≥10分钟：\(viewModel.dailyMetrics.delayedCount)/\(viewModel.goalDelayedCount)")
-                    .font(.subheadline)
-                Text("最短间隔：\(minIntervalText)（目标 ≥\(viewModel.goalMinIntervalMinutes) 分钟）")
-                    .font(.subheadline)
-                Text("起意→抽烟转化率：\(viewModel.dailyMetrics.cravingConversionRateText)（起意\(viewModel.dailyMetrics.cravingCount)，扛过\(viewModel.dailyMetrics.cravingResistedCount)）")
+                if viewModel.hasDelayedGoal {
+                    Text("延迟达标：\(viewModel.dailyMetrics.delayedCount)/\(viewModel.goalDelayedCount)")
+                        .font(.subheadline)
+                } else {
+                    Text("延迟达标：本周不设目标")
+                        .font(.subheadline)
+                }
+                if viewModel.hasIntervalGoal {
+                    Text("最短间隔：\(minIntervalText)（目标 ≥\(viewModel.goalMinIntervalMinutes) 分钟）")
+                        .font(.subheadline)
+                } else {
+                    Text("最短间隔：\(minIntervalText)（本周不设间隔目标）")
+                        .font(.subheadline)
+                }
+                Text("冲动→抽烟转化率：\(viewModel.dailyMetrics.cravingConversionRateText)（冲动\(viewModel.dailyMetrics.cravingCount)，扛过\(viewModel.dailyMetrics.cravingResistedCount)）")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
                 if !viewModel.warningLines.isEmpty {
                     Divider()
                     ForEach(viewModel.warningLines, id: \.self) { line in
-                        Text("⚠️ \(line)")
+                        Text(line)
                             .font(.footnote)
                             .foregroundStyle(.orange)
                     }

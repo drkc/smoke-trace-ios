@@ -226,42 +226,38 @@ struct CessationDailyMetrics {
         var lines: [String] = []
         let quotaEval = evaluateCategoryQuota(goal: goal)
 
-        // Red: total-limit event (plan continues; no restart semantics).
         if goal.dailyLimit == 0 {
             if smokedCount > 0 {
-                lines.append("🔴 Quit周出现抽烟记录（\(smokedCount)/0）。这是红色事件，但计划继续；下一次 craving 回到 0 支计划，并记录触发点，不放弃今天/本周。")
+                lines.append("🔴 出现红色事件；计划继续，下一次冲动回到 0 支计划。")
             }
         } else if smokedCount > goal.dailyLimit {
-            lines.append("🔴 今日总量超出（\(smokedCount)/\(goal.dailyLimit)）。这是红色事件，但计划继续；下一次回到计划内。")
+            lines.append("🔴 今日总量超出目标；计划继续，下一次回到当前周目标。")
         }
 
-        // Yellow: category training hard-over.
         if quotaEval.totalHardOver > 0, let top = topHardOverItem(from: quotaEval) {
             let category = categoryDisplayName(top.category)
-            lines.append("🟡 分类训练目标超出：\(category)（超 \(top.hardOver)）。剩余烟不要再用于该分类，明天优先砍 1 支\(category)烟。")
+            lines.append("🟡 \(category)超出训练目标；剩余烟不要再用于这个场景。")
         }
 
-        // Blue: buffer consumed but still controllable.
         if quotaEval.bufferUsed > 0, quotaEval.totalHardOver == 0 {
-            lines.append("🔵 已使用今日缓冲额度（\(quotaEval.bufferUsed)/\(quotaEval.bufferTotal)），当前分类目标整体仍可控。")
+            lines.append("🔵 已使用今日缓冲；今天不要再扩展例外。")
         }
 
-        // Blue: delayed target (skip on quit week where goal is nil).
         if let minDelayed10mCount = goal.minDelayed10mCount, delayedCount < minDelayed10mCount {
-            lines.append("🔵 拖延次数未达目标（\(delayedCount)/\(minDelayed10mCount)）：下一支先拖延 10 分钟。")
+            let lack = max(0, minDelayed10mCount - delayedCount)
+            lines.append("🔵 延迟达标还差 \(lack) 次；下一支先拖 10 分钟。")
         }
 
-        // Blue: resisted craving target.
         if let minResistedCravings = goal.minResistedCravings,
            cravingResistedCount < minResistedCravings {
-            lines.append("🔵 扛过次数未达目标（\(cravingResistedCount)/\(minResistedCravings)）：下一次 craving 尝试记录并扛过去。")
+            let lack = max(0, minResistedCravings - cravingResistedCount)
+            lines.append("🔵 扛过冲动还差 \(lack) 次；下一次先记录，撑 10 分钟。")
         }
 
-        // Blue: interval target (skip on quit week where goal is nil).
         if let goalMinGap = goal.minIntervalMinutes,
            let minGap = minIntervalMinutes,
            minGap < goalMinGap {
-            lines.append("🔵 最短间隔未达目标（\(minGap)min < \(goalMinGap)min）：下一支尽量拉开到目标间隔。")
+            lines.append("🔵 间隔未达标；下一支尽量拉到 \(goalMinGap) 分钟。")
         }
 
         return lines
@@ -270,63 +266,58 @@ struct CessationDailyMetrics {
     func nightlyReviewLines(goal: CessationWeeklyGoal) -> [String] {
         let quotaEval = evaluateCategoryQuota(goal: goal)
 
-        // 1) Daily total
         let totalLine: String = {
             if goal.dailyLimit == 0 {
                 if smokedCount == 0 {
-                    return "今日总量：0/0（Quit周守住了 0 支目标）"
+                    return "今日：0/0，继续守住归零。"
                 }
-                return "今日总量：\(smokedCount)/0（红色事件，但计划继续；下一次 craving 回到 0 支计划）"
+                return "今日：\(smokedCount)/0，红色事件；计划继续。"
             }
 
             if smokedCount > goal.dailyLimit {
-                return "今日总量：\(smokedCount)/\(goal.dailyLimit)（红色事件，但计划继续）"
+                return "今日：\(smokedCount)/\(goal.dailyLimit)，超出目标；计划继续。"
             }
-            return "今日总量：\(smokedCount)/\(goal.dailyLimit)"
+            return "今日：\(smokedCount)/\(goal.dailyLimit)。"
         }()
 
-        // 2) Category training
         let categoryTrainingLine: String = {
             if quotaEval.totalHardOver > 0, let top = topHardOverItem(from: quotaEval) {
                 let category = categoryDisplayName(top.category)
-                return "分类训练：\(category) 超出 \(top.hardOver)（总 hardOver=\(quotaEval.totalHardOver)），明天优先砍 1 支\(category)烟。"
+                return "分类：\(category)超出 \(top.hardOver)；明天先收这一类。"
             }
             if quotaEval.bufferUsed > 0 {
-                return "分类训练：今天用了缓冲（\(quotaEval.bufferUsed)/\(quotaEval.bufferTotal)），整体仍可控。"
+                return "分类：用了缓冲 \(quotaEval.bufferUsed)/\(quotaEval.bufferTotal)，整体可控。"
             }
-            return "分类训练：配额控制良好。"
+            return "分类：控制良好。"
         }()
 
-        // 3) Buffer usage
         let bufferLine: String = {
             if quotaEval.bufferUsed > 0 {
-                return "缓冲额度：已使用 \(quotaEval.bufferUsed)/\(quotaEval.bufferTotal)，剩余 \(quotaEval.bufferRemaining)。未使用额度不结转、不补抽。"
+                return "缓冲：已用 \(quotaEval.bufferUsed)/\(quotaEval.bufferTotal)；不结转、不补抽。"
             }
-            return "缓冲额度：今日未使用，剩余 \(quotaEval.bufferRemaining)/\(quotaEval.bufferTotal)。未使用额度不结转、不补抽。"
+            return "缓冲：未使用；不结转、不补抽。"
         }()
 
-        // 4) Delay / resisted
         let behaviorLine: String = {
             var parts: [String] = []
             if let minDelayed10mCount = goal.minDelayed10mCount {
-                parts.append("延迟≥10min \(delayedCount)/\(minDelayed10mCount)")
+                parts.append("延迟 \(delayedCount)/\(minDelayed10mCount)")
             }
             if let minResistedCravings = goal.minResistedCravings {
-                parts.append("扛过 craving \(cravingResistedCount)/\(minResistedCravings)")
+                parts.append("扛过冲动 \(cravingResistedCount)/\(minResistedCravings)")
             }
             if parts.isEmpty {
-                return "行为保护：N/A"
+                return "保护：本周不设该项。"
             }
-            return "行为保护：" + parts.joined(separator: "，")
+            return "保护：" + parts.joined(separator: "，")
         }()
 
-        // 5) Next focus
         let nextFocusLineText: String = {
             if goal.dailyLimit == 0 {
                 if smokedCount == 0 {
-                    return "明天重点：继续守住 0 支，下一次 craving 先记录并尽量扛过去。"
+                    return "明天：继续守住 0 支；冲动先记录，尽量扛过。"
                 }
-                return "明天重点：下一次 craving 回到 0 支计划，并记录触发点。"
+                return "明天：冲动来了先记录，回到 0 支计划。"
             }
 
             if let top = topHardOverItem(from: quotaEval) {
@@ -338,7 +329,7 @@ struct CessationDailyMetrics {
             if let next = nextFocusCategory(goal: goal) {
                 return composeNextFocusLine(for: next.category, reason: next.reason)
             }
-            return "明天重点：保持当前节奏，下一次 craving 先记录再决定是否抽。"
+            return "明天：保持节奏，冲动先记录再决定。"
         }()
 
         return [totalLine, categoryTrainingLine, bufferLine, behaviorLine, nextFocusLineText]
@@ -431,25 +422,25 @@ struct CessationDailyMetrics {
         let name = categoryDisplayName(category)
         switch category {
         case .idleTime:
-            return "明天重点：优先砍 1 支\(name)烟；下一次空档先记录 craving 并延迟 10 分钟再决定。"
+            return "明天：优先压住\(name)；先记录冲动，拖 10 分钟再决定。"
         case .workTransition:
-            return "明天重点：优先砍 1 支\(name)烟；下一次工作转换先记录 craving，再决定是否抽。"
+            return "明天：工作转换先记录冲动，拖 10 分钟再决定。"
         case .afterMeal:
             if reason == .bufferUsed {
-                return "明天重点：饭后已用到缓冲，下一次饭后先拖延 10 分钟再决定。"
+                return "明天：饭后已用到缓冲；先拖 10 分钟再决定。"
             }
-            return "明天重点：明天饭后先拖延 10 分钟，再决定是否抽。"
+            return "明天：饭后先拖 10 分钟，再决定。"
         case .afterWaking:
             switch reason {
             case .hardOver:
-                return "明天重点：起床后超过训练目标，先守住起床后 1 支上限，不要扩展成第 2 支。"
+                return "明天：起床后先守住 1 支上限，不要扩展到第 2 支。"
             case .bufferUsed:
-                return "明天重点：起床后已用到今日缓冲，明天先守住 1 支，不要扩展成第 2 支。"
+                return "明天：起床后已用到缓冲；先守住 1 支，不要扩展。"
             case .normal:
-                return "明天重点：先守住起床后不超过 1 支，把重点放在无聊/工作转换触发。"
+                return "明天：先守住起床后不超过 1 支，重点放在无聊/工作转换。"
             }
         default:
-            return "明天重点：下一次 craving 先记录再决定是否抽。"
+            return "明天：冲动先记录再决定是否抽。"
         }
     }
 
