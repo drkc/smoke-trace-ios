@@ -104,7 +104,7 @@ struct HomeView: View {
                         Text("最短间隔：\(minIntervalText)（本周不设间隔目标）")
                             .font(.subheadline)
                     }
-                    Text("冲动→抽烟转化率：\(viewModel.dailyMetrics.cravingConversionRateText)（冲动\(viewModel.dailyMetrics.cravingCount)，扛过\(viewModel.dailyMetrics.cravingResistedCount)）")
+                    Text("冲动转化率：\(viewModel.dailyMetrics.cravingConversionRateText)（冲动\(viewModel.dailyMetrics.cravingCount)，扛过\(viewModel.dailyMetrics.cravingResistedCount)）")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -137,11 +137,16 @@ struct HomeView: View {
                     .font(.headline)
                 Text(viewModel.actionStatusText)
                     .font(.subheadline)
-                Text("下一步：\(viewModel.actionNextStepText)")
+                Text(viewModel.actionNextStepText)
                     .font(.subheadline)
                 Text(viewModel.actionBufferText)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                if let extra = viewModel.actionExtraHintText {
+                    Text(extra)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

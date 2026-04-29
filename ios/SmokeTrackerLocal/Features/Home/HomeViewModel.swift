@@ -48,19 +48,13 @@ final class HomeViewModel: ObservableObject {
         let limit = activeGoal.dailyLimit
 
         if limit == 0 {
-            if smoked == 0 { return "今日 0 支，继续守住归零。" }
-            return "今日出现红色事件；计划继续，下一次回到 0 支。"
+            if smoked == 0 { return "继续守住归零。" }
+            return "出现红色事件；计划继续。"
         }
 
-        if smoked > limit {
-            return "今日 \(smoked)/\(limit)，已超出；计划继续。"
-        }
-
-        if Double(smoked) >= Double(limit) * 0.8 {
-            return "今日 \(smoked)/\(limit)，接近上限。"
-        }
-
-        return "今日 \(smoked)/\(limit)，节奏安全。"
+        if smoked > limit { return "已超出；计划继续。" }
+        if Double(smoked) >= Double(limit) * 0.8 { return "接近上限。" }
+        return "节奏安全。"
     }
 
     var actionNextStepText: String {
@@ -72,44 +66,80 @@ final class HomeViewModel: ObservableObject {
 
         if quota.totalHardOver > 0,
            let top = quota.items.filter({ $0.hardOver > 0 }).max(by: { $0.hardOver < $1.hardOver }) {
-            return "剩下的烟不要用于\(categoryName(top.category))。"
+            return "剩余烟不要用于\(categoryName(top.category))。"
         }
 
         if quota.bufferUsed > 0,
            quota.totalHardOver == 0,
            let topBuffer = quota.items.filter({ $0.bufferUsed > 0 }).max(by: { $0.bufferUsed < $1.bufferUsed }) {
             if topBuffer.category == .afterWaking {
-                return "起床后先守住 1 支上限，不要扩展。"
+                return "起床后先守住 1 支上限。"
             }
-            return "今天不要扩展\(categoryName(topBuffer.category))例外。"
+            return "今天不要再扩展例外。"
         }
 
-        if let last = nightlyReviewLines.last {
-            return last.replacingOccurrences(of: "明天：", with: "")
-        }
+        let idleRatio = ratio(used: dailyMetrics.idleCount, quota: goalIdleCount)
+        let workRatio = ratio(used: dailyMetrics.workTransitionCount, quota: goalWorkTransitionCount)
 
-        return "冲动先记录，再决定是否抽。"
+        if idleRatio >= workRatio, dailyMetrics.idleCount > 0 {
+            return "无聊/空档：先离开空档，拖 10 分钟。"
+        }
+        if dailyMetrics.workTransitionCount > 0 {
+            return "工作转换：先记录冲动，拖 10 分钟。"
+        }
+        return "先记录冲动，拖 10 分钟。"
     }
 
     var actionBufferText: String {
         let quota = dailyMetrics.evaluateCategoryQuota(goal: activeGoal)
         if quota.totalHardOver > 0 {
-            return "缓冲：已用完；分类训练目标已超出。"
+            return "缓冲：已用完，别再扩展例外。"
         }
         if quota.bufferUsed > 0 {
-            return "缓冲：已使用；今天不要扩展例外。"
+            return "缓冲：\(quota.bufferRemaining)/\(quota.bufferTotal) 已使用。"
         }
         return "缓冲：\(quota.bufferRemaining)/\(quota.bufferTotal) 可用。"
     }
 
+    var actionExtraHintText: String? {
+        let quota = dailyMetrics.evaluateCategoryQuota(goal: activeGoal)
+        if quota.bufferUsed > 0, quota.totalHardOver == 0 {
+            return "今天不要再扩展例外。"
+        }
+        return nil
+    }
+
     var goalDetailSummaryText: String {
-        "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · 工作转换 \(dailyMetrics.workTransitionCount)/\(goalWorkTransitionCount)"
+        let quota = dailyMetrics.evaluateCategoryQuota(goal: activeGoal)
+        if let top = quota.items.filter({ $0.hardOver > 0 }).max(by: { $0.hardOver < $1.hardOver }) {
+            return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · \(categoryName(top.category))超出 +\(top.hardOver)"
+        }
+        if quota.bufferUsed > 0 {
+            return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · 缓冲已用"
+        }
+        return "总量 \(dailyMetrics.smokedCount)/\(goalSmokedCount) · 缓冲 \(quota.bufferRemaining)/\(quota.bufferTotal)"
     }
 
     var nightlyReviewSummaryText: String {
-        let head = nightlyReviewLines.first ?? "今天按计划执行。"
-        let tail = nightlyReviewLines.last?.replacingOccurrences(of: "明天：", with: "") ?? ""
-        return tail.isEmpty ? head : "\(head) \(tail)"
+        let quota = dailyMetrics.evaluateCategoryQuota(goal: activeGoal)
+
+        if activeGoal.dailyLimit == 0 {
+            return dailyMetrics.smokedCount == 0
+                ? "守住 0 支；冲动先记录。"
+                : "红色事件；下一次回到 0 支。"
+        }
+
+        if dailyMetrics.smokedCount > goalSmokedCount {
+            return "已超出；下一支回到当前周目标。"
+        }
+        if Double(dailyMetrics.smokedCount) >= Double(max(1, goalSmokedCount)) * 0.8 {
+            if quota.totalHardOver > 0 { return "接近上限；优先收紧分类超出。" }
+            return "接近上限；剩余烟避开高风险触发。"
+        }
+        if quota.bufferUsed > 0 {
+            return "缓冲已用；今天别再扩展例外。"
+        }
+        return "节奏安全；明天按当前策略继续。"
     }
 
     private var activeGoal = CessationWeeklyGoal.week1Default
@@ -310,6 +340,11 @@ final class HomeViewModel: ObservableObject {
         case .afterWaking: return "起床后"
         default: return trigger.zhLabel
         }
+    }
+
+    private func ratio(used: Int, quota: Int) -> Double {
+        guard quota > 0 else { return 0 }
+        return Double(used) / Double(quota)
     }
 
     private func formatSinceLastText(minutes: Int?) -> String {
