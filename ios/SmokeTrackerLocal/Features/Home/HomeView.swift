@@ -25,11 +25,10 @@ struct HomeView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
-                            TriggerGrid { trigger in
+                            TriggerGrid(buttonHeight: 44, rowSpacing: 8, columnSpacing: 10) { trigger in
                                 viewModel.prepareCraving(trigger: trigger)
                             }
                             .controlSize(.small)
-                            .scaleEffect(y: 0.94, anchor: .top)
                         }
                     }
 
@@ -154,7 +153,7 @@ struct HomeView: View {
                 Text(viewModel.actionBufferText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
         }
     }
