@@ -2,6 +2,10 @@ import SwiftUI
 import SwiftData
 import WidgetKit
 
+private let quickRecordWidgetKindInApp = "QuickRecordWidget"
+private let smokingDashboardWidgetKindInApp = "SmokingDashboardWidget"
+private let smokingMiniDashboardWidgetKindInApp = "SmokingMiniDashboardWidget"
+
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -70,6 +74,7 @@ struct RootView: View {
             _ = AppSetting.fetchOrCreate(in: modelContext)
             refreshLockStateForCurrentSetting()
             processPendingRequestsAndRefreshUI()
+            forceRefreshAllWidgets()
             presentLaunchPickerIfNeeded()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -81,6 +86,7 @@ struct RootView: View {
             case .active:
                 refreshLockStateForCurrentSetting()
                 processPendingRequestsAndRefreshUI()
+                forceRefreshAllWidgets()
                 dataRefreshSignal = UUID()
                 presentLaunchPickerIfNeeded()
             @unknown default:
@@ -138,6 +144,19 @@ struct RootView: View {
         let inserted = WidgetQuickRecordProcessor.processPendingRequests(in: modelContext)
         if inserted > 0 {
             dataRefreshSignal = UUID()
+            forceRefreshAllWidgets()
+        }
+    }
+
+    private func forceRefreshAllWidgets() {
+        WidgetCenter.shared.reloadTimelines(ofKind: quickRecordWidgetKindInApp)
+        WidgetCenter.shared.reloadTimelines(ofKind: smokingDashboardWidgetKindInApp)
+        WidgetCenter.shared.reloadTimelines(ofKind: smokingMiniDashboardWidgetKindInApp)
+        WidgetCenter.shared.reloadAllTimelines()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            WidgetCenter.shared.reloadTimelines(ofKind: smokingDashboardWidgetKindInApp)
+            WidgetCenter.shared.reloadTimelines(ofKind: smokingMiniDashboardWidgetKindInApp)
         }
     }
 }
