@@ -7,8 +7,10 @@ struct HistoryView: View {
     @State private var selectedTrendDate: Date?
     @State private var selectedRollingDate: Date?
     @State private var editingDraft: EditableHistoryLog?
+    @State private var editingCravingDraft: EditableHistoryCraving?
     @State private var operationErrorMessage: String?
     @State private var pendingDeleteLogID: String?
+    @State private var pendingDeleteCravingID: String?
 
     var body: some View {
         NavigationStack {
@@ -46,6 +48,17 @@ struct HistoryView: View {
                     }
                 )
             }
+            .sheet(item: $editingCravingDraft) { draft in
+                HistoryCravingEditSheet(
+                    draft: draft,
+                    onSave: { newDraft in
+                        operationErrorMessage = viewModel.saveEditedCraving(newDraft)
+                    },
+                    onDelete: { id in
+                        pendingDeleteCravingID = id
+                    }
+                )
+            }
             .confirmationDialog("确认删除这条记录？", isPresented: Binding(
                 get: { pendingDeleteLogID != nil },
                 set: { shown in if !shown { pendingDeleteLogID = nil } }
@@ -59,6 +72,21 @@ struct HistoryView: View {
                 }
                 Button("取消", role: .cancel) {
                     pendingDeleteLogID = nil
+                }
+            }
+            .confirmationDialog("确认删除这条起意？", isPresented: Binding(
+                get: { pendingDeleteCravingID != nil },
+                set: { shown in if !shown { pendingDeleteCravingID = nil } }
+            )) {
+                Button("确认删除", role: .destructive) {
+                    if let id = pendingDeleteCravingID {
+                        operationErrorMessage = viewModel.deleteCraving(id: id)
+                    }
+                    pendingDeleteCravingID = nil
+                    editingCravingDraft = nil
+                }
+                Button("取消", role: .cancel) {
+                    pendingDeleteCravingID = nil
                 }
             }
             .alert("操作失败", isPresented: Binding(
@@ -417,18 +445,40 @@ struct HistoryView: View {
                 ForEach(viewModel.payload.details.prefix(50)) { item in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        Text("\(item.trigger.zhLabel) · 间隔 \(item.minutesSinceLast?.description ?? "-") 分钟")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+
+                        if item.type == .smokeLog {
+                            Text("已抽 · \(item.trigger.zhLabel) · 间隔 \(item.minutesSinceLast?.description ?? "-") 分钟")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            let statusText: String
+                            switch item.cravingStatus {
+                            case .pending: statusText = "待确认"
+                            case .smoked: statusText = "已抽"
+                            case .resisted: statusText = "已扛过"
+                            case .none: statusText = "-"
+                            }
+                            Text("起意 · \(item.trigger.zhLabel) · \(statusText)")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
 
                         HStack(spacing: 12) {
                             Button("编辑") {
-                                editingDraft = viewModel.loadEditableLog(id: item.id)
+                                if item.type == .smokeLog {
+                                    editingDraft = viewModel.loadEditableLog(id: item.rawID)
+                                } else {
+                                    editingCravingDraft = viewModel.loadEditableCraving(id: item.rawID)
+                                }
                             }
                             .buttonStyle(.bordered)
 
                             Button("删除", role: .destructive) {
-                                pendingDeleteLogID = item.id
+                                if item.type == .smokeLog {
+                                    pendingDeleteLogID = item.rawID
+                                } else {
+                                    pendingDeleteCravingID = item.rawID
+                                }
                             }
                             .buttonStyle(.bordered)
                         }

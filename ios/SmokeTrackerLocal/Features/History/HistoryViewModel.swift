@@ -9,6 +9,14 @@ struct EditableHistoryLog: Identifiable {
     var delayed10min: Bool
 }
 
+struct EditableHistoryCraving: Identifiable {
+    let id: String
+    var createdAt: Date
+    var trigger: TriggerPrimary
+    var triggerSecondary: String
+    var status: CravingEventStatus
+}
+
 @MainActor
 final class HistoryViewModel: ObservableObject {
     @Published var selectedRange: HistoryRange = .week
@@ -27,7 +35,8 @@ final class HistoryViewModel: ObservableObject {
 
     func reload(anchor: Date = Date()) {
         let logs = (try? context.fetch(FetchDescriptor<SmokeLog>())) ?? []
-        payload = service.buildPayload(range: selectedRange, anchor: anchor, logs: logs)
+        let cravings = (try? context.fetch(FetchDescriptor<CravingEvent>())) ?? []
+        payload = service.buildPayload(range: selectedRange, anchor: anchor, logs: logs, cravings: cravings)
     }
 
     func loadEditableLog(id: String) -> EditableHistoryLog? {
@@ -40,6 +49,19 @@ final class HistoryViewModel: ObservableObject {
             trigger: log.triggerPrimary,
             triggerSecondary: log.triggerSecondary ?? "",
             delayed10min: log.delayed10min
+        )
+    }
+
+    func loadEditableCraving(id: String) -> EditableHistoryCraving? {
+        guard let event = (try? context.fetch(FetchDescriptor<CravingEvent>()))?.first(where: { $0.id == id }) else {
+            return nil
+        }
+        return EditableHistoryCraving(
+            id: event.id,
+            createdAt: event.createdAt,
+            trigger: event.triggerPrimary,
+            triggerSecondary: event.triggerSecondary ?? "",
+            status: event.status
         )
     }
 
@@ -65,6 +87,44 @@ final class HistoryViewModel: ObservableObject {
     func deleteLog(id: String) -> String? {
         do {
             try maintenance.deleteLog(in: context, id: id)
+            reload()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func saveEditedCraving(_ draft: EditableHistoryCraving) -> String? {
+        do {
+            guard let event = (try? context.fetch(FetchDescriptor<CravingEvent>()))?.first(where: { $0.id == draft.id }) else {
+                return "未找到要编辑的起意记录"
+            }
+            event.createdAt = draft.createdAt
+            event.triggerPrimary = draft.trigger
+            let secondary = draft.triggerSecondary.trimmingCharacters(in: .whitespacesAndNewlines)
+            event.triggerSecondary = secondary.isEmpty ? nil : secondary
+            event.status = draft.status
+            event.resolvedAt = draft.status == .pending ? nil : (event.resolvedAt ?? draft.createdAt)
+            if draft.status != .smoked {
+                event.linkedSmokeLogID = nil
+            }
+            try context.save()
+            reload()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func deleteCraving(id: String) -> String? {
+        do {
+            guard let event = (try? context.fetch(FetchDescriptor<CravingEvent>()))?.first(where: { $0.id == id }) else {
+                return "未找到要删除的起意记录"
+            }
+            context.delete(event)
+            try context.save()
             reload()
             return nil
         } catch {

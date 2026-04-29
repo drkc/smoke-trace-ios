@@ -63,11 +63,19 @@ struct HeatmapCell: Identifiable {
     var id: String { "\(weekday)-\(hour)" }
 }
 
+enum HistoryDetailType {
+    case smokeLog
+    case craving
+}
+
 struct HistoryLogItem: Identifiable {
     let id: String
+    let rawID: String
+    let type: HistoryDetailType
     let createdAt: Date
     let trigger: TriggerPrimary
     let minutesSinceLast: Int?
+    let cravingStatus: CravingEventStatus?
 }
 
 struct HistoryPayload {
@@ -97,7 +105,7 @@ private struct StatsSnapshot {
 struct HistoryAggregationService {
     let timeZone: TimeZone
 
-    func buildPayload(range: HistoryRange, anchor: Date, logs: [SmokeLog]) -> HistoryPayload {
+    func buildPayload(range: HistoryRange, anchor: Date, logs: [SmokeLog], cravings: [CravingEvent]) -> HistoryPayload {
         let currentInterval = resolveInterval(range: range, anchor: anchor)
         let previousInterval = resolvePreviousInterval(range: range, current: currentInterval)
 
@@ -136,9 +144,34 @@ struct HistoryAggregationService {
             .map { TriggerCountPoint(trigger: $0.key, count: $0.value) }
             .sorted(by: { $0.count > $1.count })
 
-        let details = currentLogs
-            .sorted(by: { $0.createdAt > $1.createdAt })
-            .map { HistoryLogItem(id: $0.id, createdAt: $0.createdAt, trigger: $0.triggerPrimary, minutesSinceLast: $0.minutesSinceLast) }
+        let detailLogs = currentLogs
+            .map {
+                HistoryLogItem(
+                    id: "log:\($0.id)",
+                    rawID: $0.id,
+                    type: .smokeLog,
+                    createdAt: $0.createdAt,
+                    trigger: $0.triggerPrimary,
+                    minutesSinceLast: $0.minutesSinceLast,
+                    cravingStatus: nil
+                )
+            }
+
+        let currentCravings = cravings.filter { $0.createdAt >= currentInterval.start && $0.createdAt < currentInterval.end }
+        let detailCravings = currentCravings
+            .map {
+                HistoryLogItem(
+                    id: "craving:\($0.id)",
+                    rawID: $0.id,
+                    type: .craving,
+                    createdAt: $0.createdAt,
+                    trigger: $0.triggerPrimary,
+                    minutesSinceLast: nil,
+                    cravingStatus: $0.status
+                )
+            }
+
+        let details = (detailLogs + detailCravings).sorted(by: { $0.createdAt > $1.createdAt })
 
         let heatmapCells = buildHeatmapCells(from: logs)
         let rolling14 = buildRolling14DayCounts(anchor: anchor, logs: logs)
